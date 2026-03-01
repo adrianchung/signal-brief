@@ -22,8 +22,8 @@ def _print_brief(brief: str) -> None:
     print("─" * width + "\n")
 
 
-def run_pipeline(config: "Settings", provider: str = "gemini") -> None:
-    logger.info("Pipeline started (provider=%s)", provider)
+def run_pipeline(config: "Settings", provider: str = "gemini", dry_run: bool = False) -> None:
+    logger.info("Pipeline started (provider=%s, dry_run=%s)", provider, dry_run)
 
     stories = fetch_stories(config.keyword_list, config.min_score)
     logger.info("Fetched %d stories", len(stories))
@@ -34,6 +34,10 @@ def run_pipeline(config: "Settings", provider: str = "gemini") -> None:
         brief = NO_STORIES_MSG
 
     _print_brief(brief)
+
+    if dry_run:
+        logger.info("Dry-run mode — skipping delivery")
+        return
 
     deliverers = get_deliverers(config)
     if not deliverers:
