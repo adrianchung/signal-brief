@@ -18,7 +18,7 @@ def get_deliverers(config: "Settings") -> list[Deliverer]:
 
     if config.ntfy_topic:
         from src.delivery.ntfy import NtfyDeliverer
-        deliverers.append(NtfyDeliverer(config.ntfy_topic, config.ntfy_base_url))
+        deliverers.append(NtfyDeliverer(config.ntfy_topic, config.ntfy_base_url, config.ntfy_priority))
 
     if all([config.twilio_account_sid, config.twilio_auth_token, config.twilio_from_number, config.twilio_to_number]):
         from src.delivery.sms import SMSDeliverer
