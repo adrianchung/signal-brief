@@ -24,12 +24,17 @@ def main() -> None:
         default="gemini",
         help="LLM provider to use for analysis (default: gemini)",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Fetch and analyze stories but skip all delivery channels",
+    )
     args = parser.parse_args()
 
     config = Settings()
 
-    if args.now:
-        run_pipeline(config, args.provider)
+    if args.now or args.dry_run:
+        run_pipeline(config, args.provider, dry_run=args.dry_run)
     else:
         start(config, args.provider)
 
