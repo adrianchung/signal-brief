@@ -133,6 +133,18 @@ class TestClaudeAnalyzer:
         assert "https://example.com/ai" in prompt
         assert "https://example.com/k8s" in prompt
 
+    def test_analyze_uses_max_tokens_1024(self):
+        with patch("src.analysis.claude.anthropic.Anthropic") as mock_cls:
+            mock_client = mock_cls.return_value
+            mock_msg = MagicMock()
+            mock_msg.content = [MagicMock(text="brief")]
+            mock_client.messages.create.return_value = mock_msg
+
+            ClaudeAnalyzer("fake-key").analyze(SAMPLE_STORIES, ["ai"])
+            call_kwargs = mock_client.messages.create.call_args[1]
+
+        assert call_kwargs["max_tokens"] == 1024
+
 
 # ---------------------------------------------------------------------------
 # GeminiAnalyzer
@@ -167,6 +179,18 @@ class TestGeminiAnalyzer:
         assert "## Top Stories" in prompt
         assert "## Bottom Line" in prompt
 
+    def test_analyze_sends_correct_model(self):
+        with patch("src.analysis.gemini.genai.Client") as mock_cls:
+            mock_client = mock_cls.return_value
+            mock_response = MagicMock()
+            mock_response.text = "brief"
+            mock_client.models.generate_content.return_value = mock_response
+
+            GeminiAnalyzer("fake-key").analyze(SAMPLE_STORIES, ["ai"])
+            call_kwargs = mock_client.models.generate_content.call_args[1]
+
+        assert call_kwargs["model"] == "gemini-3-flash-preview"
+
 
 # ---------------------------------------------------------------------------
 # get_analyzer factory
@@ -190,3 +214,15 @@ class TestGetAnalyzer:
         cfg = MagicMock()
         with pytest.raises(RuntimeError, match="Unknown provider"):
             get_analyzer(cfg, "unknown")
+
+    def test_raises_when_claude_key_missing(self):
+        cfg = MagicMock()
+        cfg.anthropic_api_key = None
+        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+            get_analyzer(cfg, "claude")
+
+    def test_raises_when_gemini_key_missing(self):
+        cfg = MagicMock()
+        cfg.gemini_api_key = None
+        with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+            get_analyzer(cfg, "gemini")
