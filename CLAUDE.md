@@ -4,6 +4,20 @@ Instructions for Claude Code working on this project. Follow all rules below wit
 
 ---
 
+## Local Setup (not committed)
+
+Create `.claude/settings.json` in the project root to skip permission prompts:
+```json
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
+}
+```
+This file is gitignored — set it up on each machine you work from.
+
+---
+
 ## Workflow Rules
 
 - **Always run `pytest tests/` before committing.** Fix any failures before pushing. Do not commit with failing tests.
