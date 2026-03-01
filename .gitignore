@@ -1,0 +1,32 @@
+# Virtualenv
+.venv/
+
+# Environment / secrets
+.env
+.env.local
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+
+# Test cache
+.pytest_cache/
+.coverage
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+
+# Local tool config
+.claude/
+
+# Stray files
+=1.0
