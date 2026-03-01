@@ -17,6 +17,7 @@ def make_config(**kwargs):
     cfg.slack_webhook_url = kwargs.get("slack_webhook_url", None)
     cfg.ntfy_topic = kwargs.get("ntfy_topic", None)
     cfg.ntfy_base_url = kwargs.get("ntfy_base_url", "https://ntfy.sh")
+    cfg.ntfy_priority = kwargs.get("ntfy_priority", 3)
     cfg.twilio_account_sid = kwargs.get("twilio_account_sid", None)
     cfg.twilio_auth_token = kwargs.get("twilio_auth_token", None)
     cfg.twilio_from_number = kwargs.get("twilio_from_number", None)
@@ -112,6 +113,47 @@ class TestNtfyDeliverer:
             mock_post.return_value.raise_for_status.return_value = None
             NtfyDeliverer("topic", "https://ntfy.sh").send("my brief")
         assert mock_post.call_args[1]["content"] == b"my brief"
+
+    def test_priority_header_sent(self):
+        with patch("src.delivery.ntfy.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            NtfyDeliverer("topic", "https://ntfy.sh", priority=4).send("hello")
+        headers = mock_post.call_args[1]["headers"]
+        assert headers["Priority"] == "4"
+
+    def test_markdown_header_sent(self):
+        with patch("src.delivery.ntfy.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            NtfyDeliverer("topic", "https://ntfy.sh").send("hello")
+        headers = mock_post.call_args[1]["headers"]
+        assert headers.get("Markdown") == "yes"
+
+    def test_action_buttons_added_for_markdown_links(self):
+        brief = "## Brief\n- [Story One](https://example.com/a)\n- [Story Two](https://hn.com/b)"
+        with patch("src.delivery.ntfy.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            NtfyDeliverer("topic", "https://ntfy.sh").send(brief)
+        headers = mock_post.call_args[1]["headers"]
+        assert "Actions" in headers
+        assert "https://example.com/a" in headers["Actions"]
+        assert "https://hn.com/b" in headers["Actions"]
+
+    def test_no_action_header_when_no_links(self):
+        with patch("src.delivery.ntfy.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            NtfyDeliverer("topic", "https://ntfy.sh").send("plain text, no links")
+        headers = mock_post.call_args[1]["headers"]
+        assert "Actions" not in headers
+
+    def test_actions_capped_at_three(self):
+        brief = "\n".join(
+            f"[Story {i}](https://example.com/{i})" for i in range(10)
+        )
+        with patch("src.delivery.ntfy.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            NtfyDeliverer("topic", "https://ntfy.sh").send(brief)
+        headers = mock_post.call_args[1]["headers"]
+        assert headers["Actions"].count("view") == 3
 
 
 # ---------------------------------------------------------------------------

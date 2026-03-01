@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # Ntfy
     ntfy_topic: Optional[str] = None
     ntfy_base_url: str = "https://ntfy.sh"
+    ntfy_priority: int = 3  # 1=min 2=low 3=default 4=high 5=urgent
 
     # Twilio SMS
     twilio_account_sid: Optional[str] = None
