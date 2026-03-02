@@ -34,6 +34,25 @@ Start scheduler with Claude:
 python main.py --provider claude
 ```
 
+## Docker
+
+Build the image:
+```bash
+docker build -t signal-brief .
+```
+
+Run once (one-shot):
+```bash
+docker run --env-file .env signal-brief python main.py --now
+docker run --env-file .env signal-brief python main.py --now --provider claude
+docker run --env-file .env signal-brief python main.py --dry-run
+```
+
+Run scheduler (continuous, fires at `SCHEDULE_TIMES`):
+```bash
+docker compose up -d
+```
+
 ## Configuration (`.env`)
 
 | Variable | Required | Description |
