@@ -4,7 +4,7 @@ import pytest
 
 from src.delivery import get_deliverers
 from src.delivery.slack import SlackDeliverer
-from src.delivery.ntfy import NtfyDeliverer
+from src.delivery.ntfy import NtfyDeliverer, _extract_story_actions
 from src.delivery.sms import SMSDeliverer
 
 
@@ -135,8 +135,8 @@ class TestNtfyDeliverer:
             NtfyDeliverer("topic", "https://ntfy.sh").send(brief)
         headers = mock_post.call_args[1]["headers"]
         assert "Actions" in headers
-        assert "https://example.com/a" in headers["Actions"]
-        assert "https://hn.com/b" in headers["Actions"]
+        assert "view, Story One, https://example.com/a" in headers["Actions"]
+        assert "view, Story Two, https://hn.com/b" in headers["Actions"]
 
     def test_no_action_header_when_no_links(self):
         with patch("src.delivery.ntfy.httpx.post") as mock_post:
@@ -154,6 +154,43 @@ class TestNtfyDeliverer:
             NtfyDeliverer("topic", "https://ntfy.sh").send(brief)
         headers = mock_post.call_args[1]["headers"]
         assert headers["Actions"].count("view") == 3
+
+
+# ---------------------------------------------------------------------------
+# _extract_story_actions (format contract tests — no mocking)
+# ---------------------------------------------------------------------------
+
+class TestExtractStoryActions:
+    def test_single_link_correct_format(self):
+        result = _extract_story_actions("[Story One](https://example.com)")
+        assert result == "view, Story One, https://example.com"
+
+    def test_multiple_links_semicolon_separated(self):
+        brief = "[A](https://a.com)\n[B](https://b.com)"
+        result = _extract_story_actions(brief)
+        assert result == "view, A, https://a.com; view, B, https://b.com"
+
+    def test_capped_at_max_actions(self):
+        brief = "\n".join(f"[S{i}](https://example.com/{i})" for i in range(5))
+        result = _extract_story_actions(brief, max_actions=2)
+        assert result.count("view,") == 2
+
+    def test_deduplicates_same_url(self):
+        brief = "[A](https://example.com)\n[B](https://example.com)"
+        result = _extract_story_actions(brief)
+        assert result.count("view,") == 1
+
+    def test_no_links_returns_empty_string(self):
+        assert _extract_story_actions("plain text no links") == ""
+
+    def test_label_commas_stripped(self):
+        result = _extract_story_actions("[Story, With, Commas](https://example.com)")
+        assert result == "view, Story With Commas, https://example.com"
+
+    def test_label_semicolons_stripped(self):
+        result = _extract_story_actions("[Story; Title](https://example.com)")
+        label_part = result.split(", https://")[0].replace("view, ", "")
+        assert ";" not in label_part
 
 
 # ---------------------------------------------------------------------------
