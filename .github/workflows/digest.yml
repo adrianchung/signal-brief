@@ -2,8 +2,8 @@ name: Run digest
 
 on:
   schedule:
-    - cron: '0 15 * * *'   # 08:00 Vancouver (PDT, UTC-7)
-    - cron: '0 1 * * *'    # 17:00 Vancouver (PDT, UTC-7)
+    - cron: '0 12 * * *'   # 08:00 Toronto (EDT, UTC-4)
+    - cron: '0 21 * * *'   # 17:00 Toronto (EDT, UTC-4)
   workflow_dispatch:         # allow manual trigger from GitHub UI
 
 jobs:
