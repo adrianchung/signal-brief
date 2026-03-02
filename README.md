@@ -1,6 +1,6 @@
 # signal-brief
 
-Fetches filtered Hacker News stories, analyzes them with Claude, and delivers a curated digest via Slack, Ntfy, and/or SMS.
+Fetches filtered Hacker News stories, analyzes them with Claude or Gemini, and delivers a curated digest via Slack, Ntfy, and/or SMS.
 
 ## Setup
 
@@ -9,26 +9,37 @@ pyenv install 3.11.9   # if not already installed
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # fill in ANTHROPIC_API_KEY + at least one delivery channel
+cp .env.example .env   # fill in at least one LLM key (GEMINI_API_KEY or ANTHROPIC_API_KEY) + at least one delivery channel
 ```
 
 ## Usage
 
-Run once immediately:
+Run once with Gemini (default):
 ```bash
 python main.py --now
 ```
 
-Start the scheduler (fires at `SCHEDULE_TIMES`):
+Run once with Claude:
+```bash
+python main.py --now --provider claude
+```
+
+Start scheduler with Gemini (default):
 ```bash
 python main.py
+```
+
+Start scheduler with Claude:
+```bash
+python main.py --provider claude
 ```
 
 ## Configuration (`.env`)
 
 | Variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | Claude API key |
+| `GEMINI_API_KEY` | One of these two is required | Google Gemini API key (default provider) |
+| `ANTHROPIC_API_KEY` | One of these two is required | Anthropic Claude API key |
 | `MIN_SCORE` | No (default: 150) | Minimum HN point threshold |
 | `KEYWORDS` | No | Comma-separated keywords to filter stories |
 | `SCHEDULE_TIMES` | No (default: 08:00,17:00) | Comma-separated HH:MM times to run |
