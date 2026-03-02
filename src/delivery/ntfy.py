@@ -11,7 +11,7 @@ def _extract_story_actions(brief: str, max_actions: int = 3) -> str:
     found in the brief (markdown link format), capped at *max_actions*.
 
     Example result:
-        view "Story A", https://example.com; view "Story B", https://hn.com/...
+        view, Story A, https://example.com; view, Story B, https://hn.com/...
     """
     seen: set[str] = set()
     actions: list[str] = []
@@ -20,7 +20,7 @@ def _extract_story_actions(brief: str, max_actions: int = 3) -> str:
             seen.add(url)
             # Ntfy action labels must not contain commas or semicolons
             safe_label = label.replace(",", "").replace(";", "")[:50]
-            actions.append(f'view "{safe_label}", {url}')
+            actions.append(f"view, {safe_label}, {url}")
         if len(actions) >= max_actions:
             break
     return "; ".join(actions)
