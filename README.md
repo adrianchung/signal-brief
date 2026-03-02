@@ -46,6 +46,7 @@ python main.py --provider claude
 | `SLACK_WEBHOOK_URL` | Optional | Slack incoming webhook URL |
 | `NTFY_TOPIC` | Optional | Ntfy topic name |
 | `NTFY_BASE_URL` | Optional (default: https://ntfy.sh) | Ntfy server base URL |
+| `NTFY_PRIORITY` | No (default: 3) | Ntfy message priority (1=min 2=low 3=default 4=high 5=urgent) |
 | `TWILIO_ACCOUNT_SID` | Optional | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | Optional | Twilio auth token |
 | `TWILIO_FROM_NUMBER` | Optional | Twilio sender number |
