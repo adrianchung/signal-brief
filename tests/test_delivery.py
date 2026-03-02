@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.delivery import get_deliverers
-from src.delivery.slack import SlackDeliverer
+from src.delivery.slack import SlackDeliverer, _to_mrkdwn
 from src.delivery.ntfy import NtfyDeliverer, _extract_story_actions
 from src.delivery.sms import SMSDeliverer
 
@@ -75,6 +75,31 @@ class TestGetDeliverers:
 # SlackDeliverer
 # ---------------------------------------------------------------------------
 
+class TestToMrkdwn:
+    def test_heading_converted_to_bold(self):
+        assert _to_mrkdwn("## Theme") == "*Theme*"
+
+    def test_h3_converted_to_bold(self):
+        assert _to_mrkdwn("### Bottom Line") == "*Bottom Line*"
+
+    def test_bold_converted(self):
+        assert _to_mrkdwn("**important**") == "*important*"
+
+    def test_link_converted(self):
+        assert _to_mrkdwn("[Story](https://example.com)") == "<https://example.com|Story>"
+
+    def test_plain_text_unchanged(self):
+        assert _to_mrkdwn("plain text") == "plain text"
+
+    def test_full_brief_conversion(self):
+        brief = "## Theme\nAI is rising.\n\n- **[Cool Story](https://example.com)** — it matters."
+        result = _to_mrkdwn(brief)
+        assert "*Theme*" in result
+        assert "<https://example.com|Cool Story>" in result
+        assert "**" not in result
+        assert "##" not in result
+
+
 class TestSlackDeliverer:
     def test_posts_to_webhook_url(self):
         with patch("src.delivery.slack.httpx.post") as mock_post:
@@ -83,12 +108,14 @@ class TestSlackDeliverer:
         mock_post.assert_called_once()
         assert mock_post.call_args[0][0] == "https://hooks.slack.com/x"
 
-    def test_brief_included_in_payload(self):
+    def test_brief_converted_to_mrkdwn_in_payload(self):
         with patch("src.delivery.slack.httpx.post") as mock_post:
             mock_post.return_value.raise_for_status.return_value = None
-            SlackDeliverer("https://hooks.slack.com/x").send("my brief")
+            SlackDeliverer("https://hooks.slack.com/x").send("## Theme\n**bold** and [link](https://example.com)")
         payload = mock_post.call_args[1]["json"]
-        assert "my brief" in payload["text"]
+        assert "*Theme*" in payload["text"]
+        assert "*bold*" in payload["text"]
+        assert "<https://example.com|link>" in payload["text"]
 
 
 # ---------------------------------------------------------------------------
