@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 from src.analysis import get_analyzer
 from src.delivery import get_deliverers
+from src.ranking import rank_stories
 from src.sources.hackernews import fetch_stories
 
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ def run_pipeline(config: "Settings", provider: str = "gemini", dry_run: bool = F
     logger.info("Fetched %d stories", len(stories))
 
     if stories:
+        stories = rank_stories(stories, config.keyword_list, config.top_n_stories)
         brief = get_analyzer(config, provider).analyze(stories, config.keyword_list)
     else:
         brief = NO_STORIES_MSG

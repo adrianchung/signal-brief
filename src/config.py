@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # HN filtering
     min_score: int = 150
+    top_n_stories: int = 10
     # Stored as CSV strings — pydantic-settings v2 JSON-parses list[str] from dotenv,
     # which breaks comma-separated values. Use .keyword_list / .schedule_time_list instead.
     keywords: str = "kubernetes,MCP,AI agents,GKE,agentic,LLM,open source AI,Claude"
