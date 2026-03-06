@@ -45,6 +45,12 @@ Bypass cross-run deduplication (re-show all stories):
 python main.py --now --ignore-seen
 ```
 
+Run a specific named profile manually:
+```bash
+python main.py --now --profile morning
+python main.py --now --dry-run --profile evening
+```
+
 View recent run history:
 ```bash
 python main.py --history        # last 10 runs
@@ -93,6 +99,22 @@ docker compose up -d
 | `HISTORY_RETENTION_DAYS` | No (default: 30) | Days to keep run records before pruning |
 
 All delivery channels are opt-in — only channels with credentials configured will fire.
+
+### Named schedule profiles
+
+Define any number of named profiles with their own time, keywords, and LLM style hint. If any profiles are defined they replace `SCHEDULE_TIMES`.
+
+```env
+SCHEDULE_MORNING=08:00
+SCHEDULE_MORNING_KEYWORDS=LLM,AI agents,Claude,agentic
+SCHEDULE_MORNING_STYLE=concise morning briefing for a technical lead starting their day
+
+SCHEDULE_EVENING=17:00
+SCHEDULE_EVENING_KEYWORDS=kubernetes,GKE,open source AI,MCP
+SCHEDULE_EVENING_STYLE=end-of-day infrastructure and tooling roundup
+```
+
+Run a profile manually: `python main.py --now --profile morning`
 
 ## Testing
 

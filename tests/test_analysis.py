@@ -67,6 +67,7 @@ class TestPromptTemplate:
         prompt = PROMPT_TEMPLATE.format(
             n=len(SAMPLE_STORIES),
             keywords="ai, kubernetes",
+            style_section="",
             formatted_story_list=formatted,
         )
         assert "2" in prompt

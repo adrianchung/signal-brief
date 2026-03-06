@@ -58,7 +58,7 @@ class TestRunPipeline:
              patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
             run_pipeline(config, provider="gemini")
 
-        mock_analyzer.analyze.assert_called_once_with(stories, config.keyword_list)
+        mock_analyzer.analyze.assert_called_once_with(stories, config.keyword_list, "")
         mock_deliverer.send.assert_called_once_with("the brief")
 
     def test_delivery_failure_does_not_abort_other_channels(self):

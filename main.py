@@ -35,6 +35,12 @@ def main() -> None:
         help="Bypass cross-run deduplication (show all stories regardless of prior runs)",
     )
     parser.add_argument(
+        "--profile",
+        metavar="NAME",
+        default=None,
+        help="Use a named schedule profile (e.g. morning, evening)",
+    )
+    parser.add_argument(
         "--history",
         metavar="N",
         nargs="?",
@@ -50,7 +56,15 @@ def main() -> None:
         from src.history import RunLogger
         RunLogger(config.history_path, config.history_retention_days).print_history(args.history)
     elif args.now or args.dry_run:
-        run_pipeline(config, args.provider, dry_run=args.dry_run, ignore_seen=args.ignore_seen)
+        profile = None
+        if args.profile:
+            from src.profiles import get_profile
+            profile = get_profile(config, args.profile)
+            if profile is None:
+                import sys
+                print(f"Error: profile {args.profile!r} not found. Check SCHEDULE_<NAME> env vars.", file=sys.stderr)
+                sys.exit(1)
+        run_pipeline(config, args.provider, dry_run=args.dry_run, ignore_seen=args.ignore_seen, profile=profile)
     else:
         start(config, args.provider)
 

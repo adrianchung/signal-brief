@@ -11,6 +11,7 @@ from src.sources.hackernews import fetch_stories
 
 if TYPE_CHECKING:
     from src.config import Settings
+    from src.profiles import DigestProfile
 
 logger = logging.getLogger(__name__)
 
@@ -31,16 +32,22 @@ def run_pipeline(
     provider: str = "gemini",
     dry_run: bool = False,
     ignore_seen: bool = False,
+    profile: "DigestProfile | None" = None,
 ) -> None:
+    profile_name = profile.name if profile else "default"
+    keywords = profile.keywords if profile else config.keyword_list
+    style_hint = profile.style if profile else ""
+
     logger.info(
-        "Pipeline started (provider=%s, dry_run=%s, ignore_seen=%s)",
-        provider, dry_run, ignore_seen,
+        "Pipeline started (provider=%s, profile=%s, dry_run=%s, ignore_seen=%s)",
+        provider, profile_name, dry_run, ignore_seen,
     )
 
     run_log = RunLogger(config.history_path, config.history_retention_days)
     record: dict = {
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "provider": provider,
+        "profile": profile_name,
         "dry_run": dry_run,
         "stories_fetched": 0,
         "stories_after_dedup": 0,
@@ -50,7 +57,7 @@ def run_pipeline(
     }
 
     try:
-        stories = fetch_stories(config.keyword_list, config.min_score)
+        stories = fetch_stories(keywords, config.min_score)
     except Exception as exc:
         logger.exception("Fetch step failed")
         record["status"] = "fetch_error"
@@ -73,9 +80,9 @@ def run_pipeline(
     record["stories_after_dedup"] = len(stories)
 
     if stories:
-        stories = rank_stories(stories, config.keyword_list, config.top_n_stories)
+        stories = rank_stories(stories, keywords, config.top_n_stories)
         try:
-            brief = get_analyzer(config, provider).analyze(stories, config.keyword_list)
+            brief = get_analyzer(config, provider).analyze(stories, keywords, style_hint)
         except Exception as exc:
             logger.exception("Analysis step failed")
             record["status"] = "analysis_error"

@@ -3,8 +3,7 @@ import anthropic
 MODEL = "claude-sonnet-4-6"
 
 PROMPT_TEMPLATE = """\
-You are a senior engineer reviewing today's Hacker News signal for a busy technical lead.
-
+You are a senior engineer reviewing today's Hacker News signal for a busy technical lead.{style_section}
 Below are {n} stories from the past 12 hours that matched keywords: {keywords}.
 
 Respond in **Markdown** using exactly this structure:
@@ -42,11 +41,13 @@ class ClaudeAnalyzer:
     def __init__(self, api_key: str) -> None:
         self.client = anthropic.Anthropic(api_key=api_key)
 
-    def analyze(self, stories: list[dict], keywords: list[str]) -> str:
+    def analyze(self, stories: list[dict], keywords: list[str], style_hint: str = "") -> str:
         formatted = _format_stories(stories)
+        style_section = f"\n{style_hint}" if style_hint else ""
         prompt = PROMPT_TEMPLATE.format(
             n=len(stories),
             keywords=", ".join(keywords),
+            style_section=style_section,
             formatted_story_list=formatted,
         )
         message = self.client.messages.create(
