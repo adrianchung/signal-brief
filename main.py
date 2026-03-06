@@ -29,12 +29,17 @@ def main() -> None:
         action="store_true",
         help="Fetch and analyze stories but skip all delivery channels",
     )
+    parser.add_argument(
+        "--ignore-seen",
+        action="store_true",
+        help="Bypass cross-run deduplication (show all stories regardless of prior runs)",
+    )
     args = parser.parse_args()
 
     config = Settings()
 
     if args.now or args.dry_run:
-        run_pipeline(config, args.provider, dry_run=args.dry_run)
+        run_pipeline(config, args.provider, dry_run=args.dry_run, ignore_seen=args.ignore_seen)
     else:
         start(config, args.provider)
 

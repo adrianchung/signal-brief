@@ -1,10 +1,22 @@
+import pytest
 from unittest.mock import MagicMock, patch
 
 from src.pipeline import run_pipeline, NO_STORIES_MSG
 
 
-SAMPLE_STORY = {"title": "T", "score": 200, "url": "https://example.com",
+SAMPLE_STORY = {"objectID": "1", "title": "T", "score": 200, "url": "https://example.com",
                 "author": "u", "num_comments": 0, "created_at": ""}
+
+
+@pytest.fixture(autouse=True)
+def mock_seen_tracker():
+    """Patch SeenStoryTracker so pipeline tests don't touch the filesystem
+    and don't fail on MagicMock config fields."""
+    with patch("src.pipeline.SeenStoryTracker") as mock_cls:
+        instance = MagicMock()
+        instance.filter_new.side_effect = lambda stories: stories
+        mock_cls.return_value = instance
+        yield mock_cls
 
 
 def make_config(keywords="ai,ml", min_score=150):
@@ -230,3 +242,67 @@ class TestRunPipelineAlerting:
             run_pipeline(config, provider="gemini", dry_run=True)
 
         mock_alert.assert_not_called()
+
+
+class TestRunPipelineDedup:
+    def test_dedup_filter_called_by_default(self, mock_seen_tracker):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+
+        with patch("src.pipeline.fetch_stories", return_value=[SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[]):
+            run_pipeline(config, provider="gemini")
+
+        mock_seen_tracker.return_value.filter_new.assert_called_once()
+
+    def test_ignore_seen_skips_filter(self, mock_seen_tracker):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+
+        with patch("src.pipeline.fetch_stories", return_value=[SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[]):
+            run_pipeline(config, provider="gemini", ignore_seen=True)
+
+        mock_seen_tracker.return_value.filter_new.assert_not_called()
+
+    def test_mark_seen_called_after_analysis(self, mock_seen_tracker):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+        mock_deliverer = MagicMock()
+
+        with patch("src.pipeline.fetch_stories", return_value=[SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
+            run_pipeline(config, provider="gemini")
+
+        mock_seen_tracker.return_value.mark_seen.assert_called_once()
+
+    def test_dry_run_skips_mark_seen(self, mock_seen_tracker):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+
+        with patch("src.pipeline.fetch_stories", return_value=[SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[]):
+            run_pipeline(config, provider="gemini", dry_run=True)
+
+        mock_seen_tracker.return_value.mark_seen.assert_not_called()
+
+    def test_ignore_seen_skips_mark_seen(self, mock_seen_tracker):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+        mock_deliverer = MagicMock()
+
+        with patch("src.pipeline.fetch_stories", return_value=[SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
+            run_pipeline(config, provider="gemini", ignore_seen=True)
+
+        mock_seen_tracker.return_value.mark_seen.assert_not_called()

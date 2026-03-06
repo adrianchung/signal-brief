@@ -31,3 +31,4 @@ build/
 # Stray files
 =1.0
 CLAUDE.local.md
+data/

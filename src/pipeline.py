@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 from src.analysis import get_analyzer
 from src.delivery import get_deliverers
+from src.dedup import SeenStoryTracker
 from src.ranking import rank_stories
 from src.sources.hackernews import fetch_stories
 
@@ -23,8 +24,16 @@ def _print_brief(brief: str) -> None:
     print("─" * width + "\n")
 
 
-def run_pipeline(config: "Settings", provider: str = "gemini", dry_run: bool = False) -> None:
-    logger.info("Pipeline started (provider=%s, dry_run=%s)", provider, dry_run)
+def run_pipeline(
+    config: "Settings",
+    provider: str = "gemini",
+    dry_run: bool = False,
+    ignore_seen: bool = False,
+) -> None:
+    logger.info(
+        "Pipeline started (provider=%s, dry_run=%s, ignore_seen=%s)",
+        provider, dry_run, ignore_seen,
+    )
 
     try:
         stories = fetch_stories(config.keyword_list, config.min_score)
@@ -36,6 +45,12 @@ def run_pipeline(config: "Settings", provider: str = "gemini", dry_run: bool = F
         return
 
     logger.info("Fetched %d stories", len(stories))
+
+    tracker = SeenStoryTracker(config.seen_stories_path, config.dedup_window_days)
+
+    if not ignore_seen:
+        stories = tracker.filter_new(stories)
+        logger.info("%d stories after dedup filter", len(stories))
 
     if stories:
         stories = rank_stories(stories, config.keyword_list, config.top_n_stories)
@@ -53,8 +68,13 @@ def run_pipeline(config: "Settings", provider: str = "gemini", dry_run: bool = F
     _print_brief(brief)
 
     if dry_run:
-        logger.info("Dry-run mode — skipping delivery")
+        logger.info("Dry-run mode — skipping delivery and seen-story recording")
         return
+
+    # Mark stories as seen before delivery so a crash mid-delivery doesn't
+    # cause the same stories to be re-analysed on the next run.
+    if not ignore_seen and stories:
+        tracker.mark_seen(stories)
 
     deliverers = get_deliverers(config)
     if not deliverers:

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # If unset, falls back to the first available configured channel.
     alert_channel: Optional[str] = None
 
+    # Cross-run deduplication
+    dedup_window_days: int = 7
+    seen_stories_path: str = "data/seen_stories.json"
+
     @property
     def keyword_list(self) -> list[str]:
         return [k.strip() for k in self.keywords.split(",") if k.strip()]

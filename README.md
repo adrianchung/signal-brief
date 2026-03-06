@@ -40,6 +40,11 @@ python main.py --now --dry-run
 python main.py --now --dry-run --provider claude
 ```
 
+Bypass cross-run deduplication (re-show all stories):
+```bash
+python main.py --now --ignore-seen
+```
+
 ## Docker
 
 Build the image:
@@ -76,6 +81,8 @@ docker compose up -d
 | `TWILIO_AUTH_TOKEN` | Optional | Twilio auth token |
 | `TWILIO_FROM_NUMBER` | Optional | Twilio sender number |
 | `TWILIO_TO_NUMBER` | Optional | SMS recipient number |
+| `DEDUP_WINDOW_DAYS` | No (default: 7) | Days before a seen story can resurface |
+| `SEEN_STORIES_PATH` | No (default: data/seen_stories.json) | Path to the seen-story ID cache |
 
 All delivery channels are opt-in — only channels with credentials configured will fire.
 
