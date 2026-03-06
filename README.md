@@ -34,6 +34,12 @@ Start scheduler with Claude:
 python main.py --provider claude
 ```
 
+Dry-run (fetch + analyze, skip delivery):
+```bash
+python main.py --now --dry-run
+python main.py --now --dry-run --provider claude
+```
+
 ## Docker
 
 Build the image:
@@ -93,8 +99,14 @@ E2E tests validate the full pipeline with real credentials and Slack delivery. T
 
 **Run locally:**
 ```bash
-# Ensure .env has the credentials above, then:
+# Full pipeline E2E (sends real Slack messages + consumes LLM quota):
 pytest -m e2e -v
+
+# Slack webhook only (2 messages, no LLM calls):
+pytest -m e2e -k "TestSlackWebhookSmoke" -v
+
+# Validate brief content without any delivery (no quota/messages):
+python main.py --now --dry-run
 ```
 
 **Run via GitHub Actions:**
