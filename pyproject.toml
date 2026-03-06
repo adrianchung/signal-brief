@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+markers = [
+    "e2e: end-to-end smoke tests requiring real credentials (deselected by default)",
+]
+addopts = "-m 'not e2e'"

@@ -1,0 +1,33 @@
+name: E2E smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'LLM provider (gemini or claude)'
+        required: false
+        default: 'gemini'
+        type: choice
+        options:
+          - gemini
+          - claude
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run e2e smoke tests
+        run: pytest -m e2e -v
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
