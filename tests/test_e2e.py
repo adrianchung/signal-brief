@@ -12,9 +12,14 @@ Required environment variables (via .env or exported):
 
 import os
 import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from dotenv import load_dotenv
+
+# Load .env so credentials are available even when not exported in the shell.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from src.config import Settings
 from src.delivery.slack import SlackDeliverer, _to_mrkdwn
