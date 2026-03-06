@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     keywords: str = "kubernetes,MCP,AI agents,GKE,agentic,LLM,open source AI,Claude"
     schedule_times: str = "08:00,17:00"
 
+    # Alerting
+    alert_channel: Optional[str] = None  # "slack", "ntfy", or "sms"; falls back to first available
+
     # Slack
     slack_webhook_url: Optional[str] = None
 
