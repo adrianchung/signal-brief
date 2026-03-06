@@ -5,8 +5,22 @@ from src.config import Settings
 
 
 def make_settings(**kwargs):
-    """Helper: build Settings with a valid LLM key by default, ignoring any .env file."""
-    defaults = {"gemini_api_key": "test-gemini-key"}
+    """Helper: build Settings with a valid LLM key by default, ignoring any .env file.
+
+    Explicitly nulls all optional delivery fields so env vars from load_dotenv
+    in test_e2e.py don't bleed into these isolated unit tests.
+    """
+    defaults = {
+        "gemini_api_key": "test-gemini-key",
+        "anthropic_api_key": None,
+        "slack_webhook_url": None,
+        "ntfy_topic": None,
+        "twilio_account_sid": None,
+        "twilio_auth_token": None,
+        "twilio_from_number": None,
+        "twilio_to_number": None,
+        "alert_channel": None,
+    }
     defaults.update(kwargs)
     return Settings(_env_file=None, **defaults)
 
