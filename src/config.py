@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     twilio_from_number: Optional[str] = None
     twilio_to_number: Optional[str] = None
 
+    # Error alerting — channel to use for failure notifications (ntfy, slack, sms)
+    # If unset, falls back to the first available configured channel.
+    alert_channel: Optional[str] = None
+
     @property
     def keyword_list(self) -> list[str]:
         return [k.strip() for k in self.keywords.split(",") if k.strip()]

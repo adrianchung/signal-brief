@@ -117,3 +117,116 @@ class TestRunPipeline:
             run_pipeline(config, provider="claude")
 
         mock_get_analyzer.assert_called_once_with(config, "claude")
+
+
+class TestRunPipelineAlerting:
+    def test_fetch_failure_sends_alert(self):
+        config = make_config()
+        with patch("src.pipeline.fetch_stories", side_effect=Exception("fetch error")), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            run_pipeline(config, provider="gemini")
+        mock_alert.assert_called_once()
+        assert mock_alert.call_args[0][1] == "fetch"
+
+    def test_fetch_failure_returns_early(self):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        with patch("src.pipeline.fetch_stories", side_effect=Exception("fetch error")), \
+             patch("src.alerting.send_error_alert"), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer):
+            run_pipeline(config, provider="gemini")
+        mock_analyzer.analyze.assert_not_called()
+
+    def test_analysis_failure_sends_alert(self):
+        config = make_config()
+        stories = [SAMPLE_STORY]
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.side_effect = Exception("api error")
+
+        with patch("src.pipeline.fetch_stories", return_value=stories), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            run_pipeline(config, provider="gemini")
+
+        mock_alert.assert_called_once()
+        assert mock_alert.call_args[0][1] == "analyze"
+
+    def test_analysis_failure_returns_early(self):
+        config = make_config()
+        stories = [SAMPLE_STORY]
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.side_effect = Exception("api error")
+        mock_deliverer = MagicMock()
+
+        with patch("src.pipeline.fetch_stories", return_value=stories), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]), \
+             patch("src.alerting.send_error_alert"):
+            run_pipeline(config, provider="gemini")
+
+        mock_deliverer.send.assert_not_called()
+
+    def test_all_deliverers_failing_sends_alert(self):
+        config = make_config()
+        stories = [SAMPLE_STORY]
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+        failing = MagicMock()
+        failing.send.side_effect = Exception("network error")
+
+        with patch("src.pipeline.fetch_stories", return_value=stories), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[failing]), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            run_pipeline(config, provider="gemini")
+
+        mock_alert.assert_called_once()
+        assert mock_alert.call_args[0][1] == "deliver"
+
+    def test_partial_delivery_success_does_not_alert(self):
+        config = make_config()
+        stories = [SAMPLE_STORY]
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+        failing = MagicMock()
+        failing.send.side_effect = Exception("network error")
+        succeeding = MagicMock()
+
+        with patch("src.pipeline.fetch_stories", return_value=stories), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[failing, succeeding]), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            run_pipeline(config, provider="gemini")
+
+        mock_alert.assert_not_called()
+
+    def test_zero_stories_does_not_send_alert(self):
+        config = make_config()
+        mock_deliverer = MagicMock()
+
+        with patch("src.pipeline.fetch_stories", return_value=[]), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            run_pipeline(config, provider="gemini")
+
+        mock_alert.assert_not_called()
+
+    def test_fetch_failure_no_alert_in_dry_run(self):
+        config = make_config()
+        with patch("src.pipeline.fetch_stories", side_effect=Exception("fetch error")), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            run_pipeline(config, provider="gemini", dry_run=True)
+        mock_alert.assert_not_called()
+
+    def test_analysis_failure_no_alert_in_dry_run(self):
+        config = make_config()
+        stories = [SAMPLE_STORY]
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.side_effect = Exception("api error")
+
+        with patch("src.pipeline.fetch_stories", return_value=stories), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            run_pipeline(config, provider="gemini", dry_run=True)
+
+        mock_alert.assert_not_called()
