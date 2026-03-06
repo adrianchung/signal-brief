@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     dedup_window_days: int = 7
     seen_stories_path: str = "data/seen_stories.json"
 
+    # Run history
+    history_path: str = "data/runs.jsonl"
+    history_retention_days: int = 30
+
     @property
     def keyword_list(self) -> list[str]:
         return [k.strip() for k in self.keywords.split(",") if k.strip()]

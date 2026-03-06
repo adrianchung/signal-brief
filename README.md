@@ -45,6 +45,12 @@ Bypass cross-run deduplication (re-show all stories):
 python main.py --now --ignore-seen
 ```
 
+View recent run history:
+```bash
+python main.py --history        # last 10 runs
+python main.py --history 20     # last 20 runs
+```
+
 ## Docker
 
 Build the image:
@@ -83,6 +89,8 @@ docker compose up -d
 | `TWILIO_TO_NUMBER` | Optional | SMS recipient number |
 | `DEDUP_WINDOW_DAYS` | No (default: 7) | Days before a seen story can resurface |
 | `SEEN_STORIES_PATH` | No (default: data/seen_stories.json) | Path to the seen-story ID cache |
+| `HISTORY_PATH` | No (default: data/runs.jsonl) | Path to the run history log |
+| `HISTORY_RETENTION_DAYS` | No (default: 30) | Days to keep run records before pruning |
 
 All delivery channels are opt-in — only channels with credentials configured will fire.
 

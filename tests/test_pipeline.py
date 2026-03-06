@@ -19,6 +19,14 @@ def mock_seen_tracker():
         yield mock_cls
 
 
+@pytest.fixture(autouse=True)
+def mock_run_logger():
+    """Patch RunLogger so pipeline tests don't touch the filesystem."""
+    with patch("src.pipeline.RunLogger") as mock_cls:
+        mock_cls.return_value = MagicMock()
+        yield mock_cls
+
+
 def make_config(keywords="ai,ml", min_score=150):
     cfg = MagicMock()
     cfg.keyword_list = keywords.split(",")

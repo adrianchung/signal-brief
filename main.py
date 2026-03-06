@@ -34,11 +34,22 @@ def main() -> None:
         action="store_true",
         help="Bypass cross-run deduplication (show all stories regardless of prior runs)",
     )
+    parser.add_argument(
+        "--history",
+        metavar="N",
+        nargs="?",
+        const=10,
+        type=int,
+        help="Print the N most recent run summaries and exit (default: 10)",
+    )
     args = parser.parse_args()
 
     config = Settings()
 
-    if args.now or args.dry_run:
+    if args.history is not None:
+        from src.history import RunLogger
+        RunLogger(config.history_path, config.history_retention_days).print_history(args.history)
+    elif args.now or args.dry_run:
         run_pipeline(config, args.provider, dry_run=args.dry_run, ignore_seen=args.ignore_seen)
     else:
         start(config, args.provider)
