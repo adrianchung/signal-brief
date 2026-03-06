@@ -73,6 +73,44 @@ docker compose up -d
 
 All delivery channels are opt-in — only channels with credentials configured will fire.
 
+## Testing
+
+Run unit tests (e2e tests are excluded by default):
+```bash
+pytest tests/
+```
+
+### E2E smoke tests
+
+E2E tests validate the full pipeline with real credentials and Slack delivery. They are skipped when credentials are not present.
+
+**Required credentials** (set in `.env` or export in shell):
+
+| Variable | Purpose |
+|---|---|
+| `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` | At least one LLM key for analysis |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook to receive the test digest |
+
+**Run locally:**
+```bash
+# Ensure .env has the credentials above, then:
+pytest -m e2e -v
+```
+
+**Run via GitHub Actions:**
+1. Go to **Actions** → **E2E smoke test**
+2. Click **Run workflow**
+3. Choose a provider (`gemini` or `claude`)
+
+The workflow reads `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, and `SLACK_WEBHOOK_URL` from repository secrets.
+
+### Adding secrets for CI
+
+In your GitHub repo, go to **Settings → Secrets and variables → Actions** and add:
+- `GEMINI_API_KEY` — your Google Gemini API key
+- `ANTHROPIC_API_KEY` — your Anthropic API key
+- `SLACK_WEBHOOK_URL` — a Slack incoming webhook URL (create one at [Slack API → Incoming Webhooks](https://api.slack.com/messaging/webhooks))
+
 ## Extending
 
 **Add a new source:** create `src/sources/<name>.py` exporting `fetch_stories(keywords, min_score, hours_back) -> list[dict]` and call it in `pipeline.py`.
