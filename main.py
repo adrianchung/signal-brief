@@ -25,6 +25,13 @@ def main() -> None:
         help="LLM provider to use for analysis (default: gemini)",
     )
     parser.add_argument(
+        "--fallback-provider",
+        choices=["gemini", "claude"],
+        default=None,
+        dest="fallback_provider",
+        help="LLM provider to try if the primary provider fails (default: FALLBACK_PROVIDER env var)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Fetch and analyze stories but skip all delivery channels",
@@ -52,6 +59,9 @@ def main() -> None:
 
     config = Settings()
 
+    import sys
+    fallback = args.fallback_provider or config.fallback_provider
+
     if args.history is not None:
         from src.history import RunLogger
         RunLogger(config.history_path, config.history_retention_days).print_history(args.history)
@@ -61,12 +71,19 @@ def main() -> None:
             from src.profiles import get_profile
             profile = get_profile(config, args.profile)
             if profile is None:
-                import sys
                 print(f"Error: profile {args.profile!r} not found. Check SCHEDULE_<NAME> env vars.", file=sys.stderr)
                 sys.exit(1)
-        run_pipeline(config, args.provider, dry_run=args.dry_run, ignore_seen=args.ignore_seen, profile=profile)
+        ok = run_pipeline(
+            config, args.provider,
+            fallback_provider=fallback,
+            dry_run=args.dry_run,
+            ignore_seen=args.ignore_seen,
+            profile=profile,
+        )
+        if not ok:
+            sys.exit(1)
     else:
-        start(config, args.provider)
+        start(config, args.provider, fallback_provider=fallback)
 
 
 if __name__ == "__main__":

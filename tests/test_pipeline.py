@@ -337,3 +337,99 @@ class TestRunPipelineDedup:
             run_pipeline(config, provider="gemini", ignore_seen=True)
 
         mock_seen_tracker.return_value.mark_seen.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Provider fallback
+# ---------------------------------------------------------------------------
+
+class TestRunPipelineFallback:
+    def _make_analyzers(self, primary_error=None, fallback_result="fallback brief"):
+        primary = MagicMock()
+        if primary_error:
+            primary.analyze.side_effect = primary_error
+        else:
+            primary.analyze.return_value = "primary brief"
+
+        fallback = MagicMock()
+        fallback.analyze.return_value = fallback_result
+
+        def get_analyzer_side_effect(cfg, prov):
+            return primary if prov == "gemini" else fallback
+
+        return primary, fallback, get_analyzer_side_effect
+
+    def test_fallback_used_when_primary_fails(self):
+        config = make_config()
+        primary, fallback, side_effect = self._make_analyzers(primary_error=Exception("503"))
+        mock_deliverer = MagicMock()
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", side_effect=side_effect), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
+            ok = run_pipeline(config, provider="gemini", fallback_provider="claude")
+
+        assert ok is True
+        fallback.analyze.assert_called_once()
+        mock_deliverer.send.assert_called_once_with("fallback brief")
+
+    def test_fallback_not_used_when_primary_succeeds(self):
+        config = make_config()
+        primary, fallback, side_effect = self._make_analyzers()
+        mock_deliverer = MagicMock()
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", side_effect=side_effect), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
+            ok = run_pipeline(config, provider="gemini", fallback_provider="claude")
+
+        assert ok is True
+        primary.analyze.assert_called_once()
+        fallback.analyze.assert_not_called()
+
+    def test_both_fail_returns_false_and_alerts(self):
+        config = make_config()
+        primary = MagicMock()
+        primary.analyze.side_effect = Exception("primary failed")
+        fallback = MagicMock()
+        fallback.analyze.side_effect = Exception("fallback failed")
+
+        def side_effect(cfg, prov):
+            return primary if prov == "gemini" else fallback
+
+        mock_deliverer = MagicMock()
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", side_effect=side_effect), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            ok = run_pipeline(config, provider="gemini", fallback_provider="claude")
+
+        assert ok is False
+        mock_deliverer.send.assert_not_called()
+        mock_alert.assert_called_once()
+        assert mock_alert.call_args[0][1] == "analyze"
+
+    def test_no_fallback_configured_returns_false_on_failure(self):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.side_effect = Exception("api error")
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.alerting.send_error_alert"):
+            ok = run_pipeline(config, provider="gemini", fallback_provider=None)
+
+        assert ok is False
+
+    def test_pipeline_returns_true_on_success(self):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.return_value = "brief"
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[MagicMock()]):
+            ok = run_pipeline(config, provider="gemini")
+
+        assert ok is True

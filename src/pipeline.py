@@ -42,17 +42,19 @@ def _merge_stories(all_stories: list[dict]) -> list[dict]:
 def run_pipeline(
     config: "Settings",
     provider: str = "gemini",
+    fallback_provider: "str | None" = None,
     dry_run: bool = False,
     ignore_seen: bool = False,
     profile: "DigestProfile | None" = None,
-) -> None:
+) -> bool:
+    """Run the full pipeline.  Returns True on success, False on error."""
     profile_name = profile.name if profile else "default"
     keywords = profile.keywords if profile else config.keyword_list
     style_hint = profile.style if profile else ""
 
     logger.info(
-        "Pipeline started (provider=%s, profile=%s, dry_run=%s, ignore_seen=%s)",
-        provider, profile_name, dry_run, ignore_seen,
+        "Pipeline started (provider=%s, fallback=%s, profile=%s, dry_run=%s, ignore_seen=%s)",
+        provider, fallback_provider or "none", profile_name, dry_run, ignore_seen,
     )
 
     run_log = RunLogger(config.history_path, config.history_retention_days)
@@ -95,7 +97,7 @@ def run_pipeline(
         record["status"] = "fetch_error"
         record["brief"] = "All sources failed to fetch"
         run_log.write(record)
-        return
+        return False
 
     stories = _merge_stories(raw_stories)
     record["stories_fetched"] = len(stories)
@@ -115,15 +117,35 @@ def run_pipeline(
             brief = get_analyzer(config, provider).analyze(
                 stories, keywords, style_hint, active_source_names
             )
-        except Exception as exc:
-            logger.exception("Analysis step failed")
-            record["status"] = "analysis_error"
-            record["brief"] = str(exc)
-            if not dry_run:
-                from src.alerting import send_error_alert
-                send_error_alert(config, "analyze", exc)
-            run_log.write(record)
-            return
+        except Exception as primary_exc:
+            if fallback_provider and fallback_provider != provider:
+                logger.warning(
+                    "Primary provider %s failed (%s) — trying fallback %s",
+                    provider, primary_exc, fallback_provider,
+                )
+                try:
+                    brief = get_analyzer(config, fallback_provider).analyze(
+                        stories, keywords, style_hint, active_source_names
+                    )
+                    logger.info("Fallback provider %s succeeded", fallback_provider)
+                except Exception as fallback_exc:
+                    logger.exception("Fallback provider %s also failed", fallback_provider)
+                    record["status"] = "analysis_error"
+                    record["brief"] = f"Primary ({provider}): {primary_exc}; Fallback ({fallback_provider}): {fallback_exc}"
+                    if not dry_run:
+                        from src.alerting import send_error_alert
+                        send_error_alert(config, "analyze", fallback_exc)
+                    run_log.write(record)
+                    return False
+            else:
+                logger.exception("Analysis step failed")
+                record["status"] = "analysis_error"
+                record["brief"] = str(primary_exc)
+                if not dry_run:
+                    from src.alerting import send_error_alert
+                    send_error_alert(config, "analyze", primary_exc)
+                run_log.write(record)
+                return False
     else:
         brief = NO_STORIES_MSG
         record["status"] = "no_stories"
@@ -134,7 +156,7 @@ def run_pipeline(
     if dry_run:
         logger.info("Dry-run mode — skipping delivery and seen-story recording")
         run_log.write(record)
-        return
+        return True
 
     if not ignore_seen and stories:
         tracker.mark_seen(stories)
@@ -143,7 +165,7 @@ def run_pipeline(
     if not deliverers:
         logger.warning("No delivery channels configured — brief will not be sent")
         run_log.write(record)
-        return
+        return True
 
     all_failed = True
     for deliverer in deliverers:
@@ -161,6 +183,9 @@ def run_pipeline(
         record["status"] = "delivery_error"
         from src.alerting import send_error_alert
         send_error_alert(config, "deliver", RuntimeError("All delivery channels failed"))
+        run_log.write(record)
+        return False
 
     run_log.write(record)
     logger.info("Pipeline complete")
+    return True

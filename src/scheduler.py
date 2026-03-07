@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def start(config: "Settings", provider: str = "gemini") -> None:
+def start(config: "Settings", provider: str = "gemini", fallback_provider: "str | None" = None) -> None:
     scheduler = BlockingScheduler()
 
     for profile in discover_profiles(config):
@@ -24,7 +24,7 @@ def start(config: "Settings", provider: str = "gemini") -> None:
                 run_pipeline,
                 trigger=trigger,
                 args=[config, provider],
-                kwargs={"profile": profile},
+                kwargs={"fallback_provider": fallback_provider, "profile": profile},
             )
             logger.info("Scheduled profile %r at %s", profile.name, profile.time)
         except (ValueError, AttributeError):

@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # If unset, falls back to the first available configured channel.
     alert_channel: Optional[str] = None
 
+    # LLM provider fallback — tried automatically if the primary provider fails
+    fallback_provider: Optional[str] = None
+
     # Additional sources
     enable_ai_tracker: bool = False
     enable_stocks: bool = False
