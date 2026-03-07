@@ -7,7 +7,7 @@ from src.delivery import get_deliverers
 from src.dedup import SeenStoryTracker
 from src.history import RunLogger
 from src.ranking import rank_stories
-from src.sources.hackernews import fetch_stories
+from src.sources import get_sources
 
 if TYPE_CHECKING:
     from src.config import Settings
@@ -25,6 +25,18 @@ def _print_brief(brief: str) -> None:
     print("─" * width)
     print(brief)
     print("─" * width + "\n")
+
+
+def _merge_stories(all_stories: list[dict]) -> list[dict]:
+    """Deduplicate by objectID, preserving first occurrence."""
+    seen: dict[str, dict] = {}
+    for story in all_stories:
+        obj_id = story.get("objectID")
+        if obj_id and obj_id not in seen:
+            seen[obj_id] = story
+        elif not obj_id:
+            seen[id(story)] = story  # no objectID — keep as-is
+    return list(seen.values())
 
 
 def run_pipeline(
@@ -56,20 +68,38 @@ def run_pipeline(
         "status": "ok",
     }
 
-    try:
-        stories = fetch_stories(keywords, config.min_score)
-    except Exception as exc:
-        logger.exception("Fetch step failed")
+    # --- Fetch from all enabled sources ---
+    raw_stories: list[dict] = []
+    active_source_names: list[str] = []
+    any_source_succeeded = False
+
+    for source in get_sources(config, keywords):
+        source_label = type(source).__name__
+        try:
+            items = source.fetch()
+            any_source_succeeded = True
+            raw_stories.extend(items)
+            for s in items:
+                sv = s.get("source", source_label)
+                if sv not in active_source_names:
+                    active_source_names.append(sv)
+            logger.info("%s: fetched %d items", source_label, len(items))
+        except Exception as exc:
+            logger.exception("%s: fetch failed", source_label)
+            if not dry_run:
+                from src.alerting import send_error_alert
+                send_error_alert(config, "fetch", exc)
+
+    if not any_source_succeeded:
+        # Every source raised — nothing to show
         record["status"] = "fetch_error"
-        record["brief"] = str(exc)
-        if not dry_run:
-            from src.alerting import send_error_alert
-            send_error_alert(config, "fetch", exc)
+        record["brief"] = "All sources failed to fetch"
         run_log.write(record)
         return
 
+    stories = _merge_stories(raw_stories)
     record["stories_fetched"] = len(stories)
-    logger.info("Fetched %d stories", len(stories))
+    logger.info("Fetched %d stories total (after merge)", len(stories))
 
     tracker = SeenStoryTracker(config.seen_stories_path, config.dedup_window_days)
 
@@ -82,7 +112,9 @@ def run_pipeline(
     if stories:
         stories = rank_stories(stories, keywords, config.top_n_stories)
         try:
-            brief = get_analyzer(config, provider).analyze(stories, keywords, style_hint)
+            brief = get_analyzer(config, provider).analyze(
+                stories, keywords, style_hint, active_source_names
+            )
         except Exception as exc:
             logger.exception("Analysis step failed")
             record["status"] = "analysis_error"
@@ -104,8 +136,6 @@ def run_pipeline(
         run_log.write(record)
         return
 
-    # Mark stories as seen before delivery so a crash mid-delivery doesn't
-    # cause the same stories to be re-analysed on the next run.
     if not ignore_seen and stories:
         tracker.mark_seen(stories)
 

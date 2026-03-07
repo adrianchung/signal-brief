@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         return self
 
     # HN filtering
-    min_score: int = 150
+    min_score: int = 10
     top_n_stories: int = 10
     # Stored as CSV strings — pydantic-settings v2 JSON-parses list[str] from dotenv,
     # which breaks comma-separated values. Use .keyword_list / .schedule_time_list instead.
@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     # If unset, falls back to the first available configured channel.
     alert_channel: Optional[str] = None
 
+    # Additional sources
+    enable_ai_tracker: bool = False
+    enable_stocks: bool = False
+    stock_tickers: str = "NVDA,MSFT,GOOGL,AAPL,META"
+    stock_move_threshold: float = 3.0
+    ai_tracker_hours_back: int = 24
+    ai_tracker_extra_feeds: str = ""  # CSV of "name=url" pairs
+
     # Cross-run deduplication
     dedup_window_days: int = 7
     seen_stories_path: str = "data/seen_stories.json"
@@ -48,6 +56,22 @@ class Settings(BaseSettings):
     # Run history
     history_path: str = "data/runs.jsonl"
     history_retention_days: int = 30
+
+    @property
+    def stock_ticker_list(self) -> list[str]:
+        return [t.strip().upper() for t in self.stock_tickers.split(",") if t.strip()]
+
+    @property
+    def ai_tracker_extra_feed_list(self) -> list[tuple[str, str]]:
+        """Parse ``"Name=url,Name2=url2"`` into ``[(name, url), ...]``."""
+        result = []
+        for item in self.ai_tracker_extra_feeds.split(","):
+            item = item.strip()
+            if "=" in item:
+                name, _, url = item.partition("=")
+                if name.strip() and url.strip():
+                    result.append((name.strip(), url.strip()))
+        return result
 
     @property
     def keyword_list(self) -> list[str]:

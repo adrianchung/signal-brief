@@ -68,6 +68,7 @@ class TestPromptTemplate:
             n=len(SAMPLE_STORIES),
             keywords="ai, kubernetes",
             style_section="",
+            sources_section=" These matched keywords: ai, kubernetes.",
             formatted_story_list=formatted,
         )
         assert "2" in prompt
