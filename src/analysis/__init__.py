@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 
 class Analyzer(Protocol):
-    def analyze(self, stories: list[dict], keywords: list[str], style_hint: str = "") -> str: ...
+    def analyze(self, stories: list[dict], keywords: list[str], style_hint: str = "", source_names: list[str] | None = None) -> str: ...
 
 
 def get_analyzer(config: "Settings", provider: str) -> Analyzer:

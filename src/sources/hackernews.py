@@ -38,7 +38,22 @@ def fetch_stories(keywords: list[str], min_score: int, hours_back: int = 12) -> 
                         "num_comments": hit.get("num_comments", 0),
                     }
 
-    return sorted(seen.values(), key=lambda s: s["score"], reverse=True)
+    stories = sorted(seen.values(), key=lambda s: s["score"], reverse=True)
+    for s in stories:
+        s.setdefault("source", "hn")
+    return stories
+
+
+class HackerNewsSource:
+    """Source wrapper for the HN Algolia API."""
+
+    def __init__(self, keywords: list[str], min_score: int, hours_back: int = 12) -> None:
+        self._keywords = keywords
+        self._min_score = min_score
+        self._hours_back = hours_back
+
+    def fetch(self) -> list[dict]:
+        return fetch_stories(self._keywords, self._min_score, self._hours_back)
 
 
 def _parse_created_at(timestamp: int | None) -> str:
