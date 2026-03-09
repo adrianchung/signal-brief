@@ -15,11 +15,13 @@ import httpx
 logger = logging.getLogger(__name__)
 
 DEFAULT_FEEDS: list[tuple[str, str]] = [
-    ("Anthropic",       "https://www.anthropic.com/rss.xml"),
-    ("Simon Willison",  "https://simonwillison.net/atom/everything/"),
-    ("OpenAI",          "https://openai.com/blog/rss.xml"),
-    ("Hugging Face",    "https://huggingface.co/blog/feed.xml"),
-    ("Google DeepMind", "https://deepmind.google/blog/rss.xml"),
+    # Anthropic has no official RSS — these are community-maintained mirrors
+    ("Anthropic News",        "https://raw.githubusercontent.com/taobojlen/anthropic-rss-feed/main/anthropic_news_rss.xml"),
+    ("Anthropic Engineering", "https://raw.githubusercontent.com/conoro/anthropic-engineering-rss-feed/main/anthropic_engineering_rss.xml"),
+    ("Simon Willison",        "https://simonwillison.net/atom/everything/"),
+    ("OpenAI",                "https://openai.com/blog/rss.xml"),
+    ("Hugging Face",          "https://huggingface.co/blog/feed.xml"),
+    ("Google DeepMind",       "https://deepmind.google/blog/rss.xml"),
 ]
 
 _HEADERS = {"User-Agent": "signal-brief/1.0 (RSS reader; +https://github.com/adrianchung/signal-brief)"}
