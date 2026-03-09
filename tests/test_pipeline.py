@@ -410,6 +410,22 @@ class TestRunPipelineFallback:
         mock_alert.assert_called_once()
         assert mock_alert.call_args[0][1] == "analyze"
 
+    def test_fallback_key_missing_logs_clear_error_and_returns_false(self):
+        config = make_config()
+        config.anthropic_api_key = None  # fallback key not set
+        primary = MagicMock()
+        primary.analyze.side_effect = Exception("503 overloaded")
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=primary), \
+             patch("src.alerting.send_error_alert") as mock_alert:
+            ok = run_pipeline(config, provider="gemini", fallback_provider="claude")
+
+        assert ok is False
+        mock_alert.assert_called_once()
+        # get_analyzer should only be called once (for the primary) since key check
+        # stops the fallback before it tries to call get_analyzer again
+
     def test_no_fallback_configured_returns_false_on_failure(self):
         config = make_config()
         mock_analyzer = MagicMock()

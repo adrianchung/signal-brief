@@ -17,6 +17,17 @@ logger = logging.getLogger(__name__)
 
 NO_STORIES_MSG = "No stories matched filters in the past 12 hours."
 
+_PROVIDER_KEY_VARS = {"gemini": "GEMINI_API_KEY", "claude": "ANTHROPIC_API_KEY"}
+
+
+def _provider_key_available(config: "Settings", provider: str) -> bool:
+    """Return True if the API key for *provider* is set in config."""
+    if provider == "claude":
+        return bool(config.anthropic_api_key)
+    if provider == "gemini":
+        return bool(config.gemini_api_key)
+    return False
+
 
 def _print_brief(brief: str) -> None:
     width = 72
@@ -119,6 +130,20 @@ def run_pipeline(
             )
         except Exception as primary_exc:
             if fallback_provider and fallback_provider != provider:
+                if not _provider_key_available(config, fallback_provider):
+                    key_var = _PROVIDER_KEY_VARS.get(fallback_provider, "API key")
+                    logger.error(
+                        "Primary provider %s failed and fallback %s is not usable: "
+                        "%s is not configured. Add it to your environment/secrets.",
+                        provider, fallback_provider, key_var,
+                    )
+                    record["status"] = "analysis_error"
+                    record["brief"] = str(primary_exc)
+                    if not dry_run:
+                        from src.alerting import send_error_alert
+                        send_error_alert(config, "analyze", primary_exc)
+                    run_log.write(record)
+                    return False
                 logger.warning(
                     "Primary provider %s failed (%s) — trying fallback %s",
                     provider, primary_exc, fallback_provider,
