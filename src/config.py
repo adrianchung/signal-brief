@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # LLM provider fallback — tried automatically if the primary provider fails
     fallback_provider: Optional[str] = None
 
+    # Include HN discussion thread URL alongside article URL in briefs (opt-in)
+    include_hn_discussion: bool = False
+
     # Additional sources
     enable_ai_tracker: bool = False
     enable_stocks: bool = False

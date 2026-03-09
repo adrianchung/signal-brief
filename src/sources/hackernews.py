@@ -28,10 +28,12 @@ def fetch_stories(keywords: list[str], min_score: int, hours_back: int = 12) -> 
             for hit in data.get("hits", []):
                 obj_id = hit.get("objectID")
                 if obj_id and obj_id not in seen:
+                    hn_url = f"https://news.ycombinator.com/item?id={obj_id}"
                     seen[obj_id] = {
                         "objectID": obj_id,
                         "title": hit.get("title", ""),
-                        "url": hit.get("url") or f"https://news.ycombinator.com/item?id={obj_id}",
+                        "url": hit.get("url") or hn_url,
+                        "hn_url": hn_url,
                         "score": hit.get("points", 0),
                         "author": hit.get("author", ""),
                         "created_at": _parse_created_at(hit.get("created_at_i")),

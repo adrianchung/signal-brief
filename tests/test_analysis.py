@@ -56,6 +56,51 @@ class TestFormatStories:
     def test_empty_list_returns_empty_string(self):
         assert _format_stories([]) == ""
 
+    def test_hn_discussion_url_included_when_flag_set(self):
+        story = {
+            "title": "Some Article",
+            "url": "https://example.com/article",
+            "hn_url": "https://news.ycombinator.com/item?id=12345",
+            "score": 100,
+            "author": "alice",
+            "num_comments": 42,
+            "created_at": "",
+            "source": "hn",
+        }
+        result = _format_stories([story], include_hn_discussion=True)
+        assert "HN discussion:" in result
+        assert "https://news.ycombinator.com/item?id=12345" in result
+
+    def test_hn_discussion_not_shown_when_url_equals_hn_url(self):
+        """Ask HN / Show HN posts have no external URL — hn_url == url, don't duplicate."""
+        hn_url = "https://news.ycombinator.com/item?id=99999"
+        story = {
+            "title": "Ask HN: Something",
+            "url": hn_url,
+            "hn_url": hn_url,
+            "score": 50,
+            "author": "bob",
+            "num_comments": 10,
+            "created_at": "",
+            "source": "hn",
+        }
+        result = _format_stories([story], include_hn_discussion=True)
+        assert result.count(hn_url) == 1  # url appears once, not twice
+
+    def test_hn_discussion_not_shown_by_default(self):
+        story = {
+            "title": "Article",
+            "url": "https://example.com",
+            "hn_url": "https://news.ycombinator.com/item?id=1",
+            "score": 50,
+            "author": "alice",
+            "num_comments": 5,
+            "created_at": "",
+            "source": "hn",
+        }
+        result = _format_stories([story])
+        assert "HN discussion:" not in result
+
 
 # ---------------------------------------------------------------------------
 # PROMPT_TEMPLATE
@@ -69,6 +114,7 @@ class TestPromptTemplate:
             keywords="ai, kubernetes",
             style_section="",
             sources_section=" These matched keywords: ai, kubernetes.",
+            hn_discussion_instruction="",
             formatted_story_list=formatted,
         )
         assert "2" in prompt

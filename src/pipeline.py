@@ -126,7 +126,8 @@ def run_pipeline(
         stories = rank_stories(stories, keywords, config.top_n_stories)
         try:
             brief = get_analyzer(config, provider).analyze(
-                stories, keywords, style_hint, active_source_names
+                stories, keywords, style_hint, active_source_names,
+                include_hn_discussion=config.include_hn_discussion
             )
         except Exception as primary_exc:
             if fallback_provider and fallback_provider != provider:
@@ -150,7 +151,8 @@ def run_pipeline(
                 )
                 try:
                     brief = get_analyzer(config, fallback_provider).analyze(
-                        stories, keywords, style_hint, active_source_names
+                        stories, keywords, style_hint, active_source_names,
+                include_hn_discussion=config.include_hn_discussion
                     )
                     logger.info("Fallback provider %s succeeded", fallback_provider)
                 except Exception as fallback_exc:

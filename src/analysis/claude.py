@@ -13,7 +13,7 @@ One sentence naming the overarching theme connecting the top items, or "No clear
 
 ## Top Stories
 Up to 5 bullet points. Each must use this exact format:
-- **[Title](url)** — one sentence: what it is and why it matters (or flag it as hype). _(N pts)_ for HN items; _(via Source Name)_ for non-HN items.
+- **[Title](url)** — one sentence: what it is and why it matters (or flag it as hype). _(N pts)_ for HN items; _(via Source Name)_ for non-HN items.{hn_discussion_instruction}
 
 Use the exact URLs from the item list below as the link targets.
 Use the exact point score from the item list for HN items. Use the feed name for non-HN items.
@@ -43,15 +43,20 @@ def _build_sources_section(keywords: list[str], source_names: list[str] | None) 
     return f"\nSources contributing to this brief: {', '.join(parts)}."
 
 
-def _format_stories(stories: list[dict]) -> str:
+def _format_stories(stories: list[dict], include_hn_discussion: bool = False) -> str:
     lines = []
     for i, story in enumerate(stories, 1):
         source_tag = f"[{story.get('feed') or story.get('source', 'HN')}] " if story.get("source") != "hn" else ""
-        lines.append(
+        entry = (
             f"{i}. {source_tag}[{story.get('score', 0)} pts] {story['title']}\n"
             f"   {story['url']}\n"
             f"   by {story['author']} | {story.get('num_comments', 0)} comments | {story.get('created_at', '')}"
         )
+        if include_hn_discussion and story.get("source") == "hn":
+            hn_url = story.get("hn_url")
+            if hn_url and hn_url != story.get("url"):
+                entry += f"\n   HN discussion: {hn_url} ({story.get('num_comments', 0)} comments)"
+        lines.append(entry)
     return "\n\n".join(lines)
 
 
@@ -65,14 +70,21 @@ class ClaudeAnalyzer:
         keywords: list[str],
         style_hint: str = "",
         source_names: list[str] | None = None,
+        include_hn_discussion: bool = False,
     ) -> str:
-        formatted = _format_stories(stories)
+        formatted = _format_stories(stories, include_hn_discussion)
         style_section = f"\n{style_hint}" if style_hint else ""
         sources_section = _build_sources_section(keywords, source_names)
+        hn_discussion_instruction = (
+            "\n  For HN stories that have a separate 'HN discussion:' URL in the item list, "
+            "add a second line under the bullet: `[N comments on HN](hn_url)`."
+            if include_hn_discussion else ""
+        )
         prompt = PROMPT_TEMPLATE.format(
             n=len(stories),
             style_section=style_section,
             sources_section=sources_section,
+            hn_discussion_instruction=hn_discussion_instruction,
             formatted_story_list=formatted,
         )
         message = self.client.messages.create(

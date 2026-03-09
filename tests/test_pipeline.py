@@ -38,6 +38,7 @@ def make_config(keywords="ai,ml", min_score=150):
     cfg = MagicMock()
     cfg.keyword_list = keywords.split(",")
     cfg.min_score = min_score
+    cfg.include_hn_discussion = False
     return cfg
 
 
@@ -83,7 +84,7 @@ class TestRunPipeline:
              patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
             run_pipeline(config, provider="gemini")
 
-        mock_analyzer.analyze.assert_called_once_with(stories, config.keyword_list, "", ["hn"])
+        mock_analyzer.analyze.assert_called_once_with(stories, config.keyword_list, "", ["hn"], include_hn_discussion=False)
         mock_deliverer.send.assert_called_once_with("the brief")
 
     def test_delivery_failure_does_not_abort_other_channels(self):

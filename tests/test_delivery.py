@@ -5,7 +5,7 @@ import pytest
 from src.delivery import get_deliverers
 from src.delivery.slack import SlackDeliverer, _to_mrkdwn
 from src.delivery.ntfy import NtfyDeliverer, _extract_story_actions
-from src.delivery.sms import SMSDeliverer
+from src.delivery.sms import SMSDeliverer, _to_sms
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +223,32 @@ class TestExtractStoryActions:
 # ---------------------------------------------------------------------------
 # SMSDeliverer
 # ---------------------------------------------------------------------------
+
+class TestToSms:
+    def test_markdown_link_becomes_label_then_url(self):
+        assert _to_sms("[Story](https://example.com)") == "Story https://example.com"
+
+    def test_heading_stripped(self):
+        assert _to_sms("## Theme") == "Theme"
+
+    def test_bold_stripped(self):
+        assert _to_sms("**important**") == "important"
+
+    def test_italic_score_preserved_as_parens(self):
+        assert _to_sms("_(123 pts)_") == "(123 pts)"
+
+    def test_plain_text_unchanged(self):
+        assert _to_sms("plain text") == "plain text"
+
+    def test_full_brief_plain(self):
+        brief = "## Theme\nAI is rising.\n\n- **[Cool Story](https://example.com)** — it matters. _(50 pts)_"
+        result = _to_sms(brief)
+        assert "##" not in result
+        assert "**" not in result
+        assert "https://example.com" in result
+        assert "Cool Story" in result
+        assert "(50 pts)" in result
+
 
 class TestSMSDeliverer:
     def _make_deliverer(self):
