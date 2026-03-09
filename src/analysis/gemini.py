@@ -1,13 +1,26 @@
+import logging
+
 from google import genai
 
 from src.analysis.claude import PROMPT_TEMPLATE, _format_stories, _build_sources_section
 
-MODEL = "gemini-3-flash-preview"
+logger = logging.getLogger(__name__)
+
+# Default fallback chain — overridden by config.gemini_model_list
+DEFAULT_MODELS = ["gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"]
+
+_RETRYABLE_KEYWORDS = ("503", "unavailable", "overloaded", "429", "rate limit", "quota exceeded")
+
+
+def _is_retryable(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(k in msg for k in _RETRYABLE_KEYWORDS)
 
 
 class GeminiAnalyzer:
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, models: list[str] | None = None) -> None:
         self.client = genai.Client(api_key=api_key)
+        self.models = models or DEFAULT_MODELS
 
     def analyze(
         self,
@@ -32,8 +45,22 @@ class GeminiAnalyzer:
             hn_discussion_instruction=hn_discussion_instruction,
             formatted_story_list=formatted,
         )
-        response = self.client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-        )
-        return response.text
+
+        last_exc: Exception | None = None
+        for model in self.models:
+            try:
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
+                if model != self.models[0]:
+                    logger.info("Gemini model %s succeeded", model)
+                return response.text
+            except Exception as exc:
+                if _is_retryable(exc):
+                    logger.warning("Gemini model %s failed (%s) — trying next model", model, exc)
+                    last_exc = exc
+                    continue
+                raise  # non-transient error — surface immediately
+
+        raise last_exc  # type: ignore[misc]  # all models failed with transient errors

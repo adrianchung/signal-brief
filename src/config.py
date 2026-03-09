@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # LLM provider fallback — tried automatically if the primary provider fails
     fallback_provider: Optional[str] = None
 
+    # Gemini model fallback chain — tried in order on transient errors before escalating to fallback_provider
+    gemini_models: str = "gemini-3-flash-preview,gemini-2.5-pro,gemini-2.5-flash"
+
     # Include HN discussion thread URL alongside article URL in briefs (opt-in)
     include_hn_discussion: bool = False
 
@@ -71,6 +74,10 @@ class Settings(BaseSettings):
     # Run history
     history_path: str = "data/runs.jsonl"
     history_retention_days: int = 30
+
+    @property
+    def gemini_model_list(self) -> list[str]:
+        return [m.strip() for m in self.gemini_models.split(",") if m.strip()]
 
     @property
     def stock_ticker_list(self) -> list[str]:

@@ -13,7 +13,7 @@ def get_analyzer(config: "Settings", provider: str) -> Analyzer:
         if not config.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY not configured")
         from src.analysis.gemini import GeminiAnalyzer
-        return GeminiAnalyzer(config.gemini_api_key)
+        return GeminiAnalyzer(config.gemini_api_key, config.gemini_model_list)
     if provider == "claude":
         if not config.anthropic_api_key:
             raise RuntimeError("ANTHROPIC_API_KEY not configured")

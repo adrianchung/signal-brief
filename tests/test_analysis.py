@@ -206,7 +206,7 @@ class TestGeminiAnalyzer:
             mock_response.text = "## Theme\nSome theme"
             mock_client.models.generate_content.return_value = mock_response
 
-            analyzer = GeminiAnalyzer("fake-key")
+            analyzer = GeminiAnalyzer("fake-key", models=["gemini-3-flash-preview"])
             result = analyzer.analyze(SAMPLE_STORIES, ["ai"])
 
         assert result == "## Theme\nSome theme"
@@ -219,7 +219,7 @@ class TestGeminiAnalyzer:
             mock_response.text = "brief"
             mock_client.models.generate_content.return_value = mock_response
 
-            GeminiAnalyzer("fake-key").analyze(SAMPLE_STORIES, ["ai"])
+            GeminiAnalyzer("fake-key", models=["gemini-3-flash-preview"]).analyze(SAMPLE_STORIES, ["ai"])
             call_kwargs = mock_client.models.generate_content.call_args[1]
             prompt = call_kwargs["contents"]
 
@@ -227,17 +227,60 @@ class TestGeminiAnalyzer:
         assert "## Top Stories" in prompt
         assert "## Bottom Line" in prompt
 
-    def test_analyze_sends_correct_model(self):
+    def test_analyze_uses_first_model_by_default(self):
         with patch("src.analysis.gemini.genai.Client") as mock_cls:
             mock_client = mock_cls.return_value
             mock_response = MagicMock()
             mock_response.text = "brief"
             mock_client.models.generate_content.return_value = mock_response
 
-            GeminiAnalyzer("fake-key").analyze(SAMPLE_STORIES, ["ai"])
+            GeminiAnalyzer("fake-key", models=["gemini-3-flash-preview"]).analyze(SAMPLE_STORIES, ["ai"])
             call_kwargs = mock_client.models.generate_content.call_args[1]
 
         assert call_kwargs["model"] == "gemini-3-flash-preview"
+
+    def test_falls_back_to_next_model_on_503(self):
+        with patch("src.analysis.gemini.genai.Client") as mock_cls:
+            mock_client = mock_cls.return_value
+            mock_response = MagicMock()
+            mock_response.text = "brief from fallback"
+            mock_client.models.generate_content.side_effect = [
+                Exception("503 service unavailable"),
+                mock_response,
+            ]
+
+            analyzer = GeminiAnalyzer("fake-key", models=["model-a", "model-b"])
+            result = analyzer.analyze(SAMPLE_STORIES, ["ai"])
+
+        assert result == "brief from fallback"
+        assert mock_client.models.generate_content.call_count == 2
+        first_call = mock_client.models.generate_content.call_args_list[0][1]["model"]
+        second_call = mock_client.models.generate_content.call_args_list[1][1]["model"]
+        assert first_call == "model-a"
+        assert second_call == "model-b"
+
+    def test_raises_when_all_models_fail_with_transient_error(self):
+        with patch("src.analysis.gemini.genai.Client") as mock_cls:
+            mock_client = mock_cls.return_value
+            mock_client.models.generate_content.side_effect = Exception("503 unavailable")
+
+            analyzer = GeminiAnalyzer("fake-key", models=["model-a", "model-b"])
+            with pytest.raises(Exception, match="503"):
+                analyzer.analyze(SAMPLE_STORIES, ["ai"])
+
+        assert mock_client.models.generate_content.call_count == 2
+
+    def test_raises_immediately_on_non_retryable_error(self):
+        with patch("src.analysis.gemini.genai.Client") as mock_cls:
+            mock_client = mock_cls.return_value
+            mock_client.models.generate_content.side_effect = Exception("invalid API key")
+
+            analyzer = GeminiAnalyzer("fake-key", models=["model-a", "model-b"])
+            with pytest.raises(Exception, match="invalid API key"):
+                analyzer.analyze(SAMPLE_STORIES, ["ai"])
+
+        # Should not try the second model for non-retryable errors
+        assert mock_client.models.generate_content.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +298,7 @@ class TestGetAnalyzer:
         with patch("src.analysis.gemini.genai.Client"):
             cfg = MagicMock()
             cfg.gemini_api_key = "fake-key"
+            cfg.gemini_model_list = ["gemini-3-flash-preview"]
             analyzer = get_analyzer(cfg, "gemini")
         assert isinstance(analyzer, GeminiAnalyzer)
 

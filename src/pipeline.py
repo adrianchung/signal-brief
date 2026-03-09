@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,20 @@ logger = logging.getLogger(__name__)
 NO_STORIES_MSG = "No stories matched filters in the past 12 hours."
 
 _PROVIDER_KEY_VARS = {"gemini": "GEMINI_API_KEY", "claude": "ANTHROPIC_API_KEY"}
+_ANALYSIS_MAX_RETRIES = 2
+_ANALYSIS_RETRY_DELAY = 10  # seconds between retries on transient errors
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Return True for transient errors worth retrying (503, 429, rate-limit, etc.)."""
+    msg = str(exc).lower()
+    return any(k in msg for k in ("503", "unavailable", "overloaded", "429", "rate limit", "quota exceeded"))
+
+
+def _is_credit_exhausted(exc: Exception) -> bool:
+    """Return True when the error indicates the provider account has no credit."""
+    msg = str(exc).lower()
+    return any(k in msg for k in ("credit balance", "billing", "insufficient credits"))
 
 
 def _provider_key_available(config: "Settings", provider: str) -> bool:
@@ -124,12 +139,31 @@ def run_pipeline(
 
     if stories:
         stories = rank_stories(stories, keywords, config.top_n_stories)
-        try:
-            brief = get_analyzer(config, provider).analyze(
-                stories, keywords, style_hint, active_source_names,
-                include_hn_discussion=config.include_hn_discussion
-            )
-        except Exception as primary_exc:
+
+        # --- Primary provider with retry on transient errors ---
+        brief = None
+        primary_exc: "Exception | None" = None
+        for attempt in range(_ANALYSIS_MAX_RETRIES + 1):
+            try:
+                brief = get_analyzer(config, provider).analyze(
+                    stories, keywords, style_hint, active_source_names,
+                    include_hn_discussion=config.include_hn_discussion,
+                )
+                primary_exc = None
+                break
+            except Exception as exc:
+                primary_exc = exc
+                if attempt < _ANALYSIS_MAX_RETRIES and _is_retryable(exc):
+                    logger.warning(
+                        "Primary provider %s failed (attempt %d/%d, retrying in %ds): %s",
+                        provider, attempt + 1, _ANALYSIS_MAX_RETRIES + 1,
+                        _ANALYSIS_RETRY_DELAY, exc,
+                    )
+                    time.sleep(_ANALYSIS_RETRY_DELAY)
+                else:
+                    break
+
+        if primary_exc is not None:
             if fallback_provider and fallback_provider != provider:
                 if not _provider_key_available(config, fallback_provider):
                     key_var = _PROVIDER_KEY_VARS.get(fallback_provider, "API key")
@@ -146,19 +180,30 @@ def run_pipeline(
                     run_log.write(record)
                     return False
                 logger.warning(
-                    "Primary provider %s failed (%s) — trying fallback %s",
-                    provider, primary_exc, fallback_provider,
+                    "Primary provider %s failed after %d attempt(s) (%s) — trying fallback %s",
+                    provider, _ANALYSIS_MAX_RETRIES + 1, primary_exc, fallback_provider,
                 )
                 try:
                     brief = get_analyzer(config, fallback_provider).analyze(
                         stories, keywords, style_hint, active_source_names,
-                include_hn_discussion=config.include_hn_discussion
+                        include_hn_discussion=config.include_hn_discussion,
                     )
                     logger.info("Fallback provider %s succeeded", fallback_provider)
                 except Exception as fallback_exc:
-                    logger.exception("Fallback provider %s also failed", fallback_provider)
+                    if _is_credit_exhausted(fallback_exc):
+                        logger.error(
+                            "Fallback provider %s has insufficient credits — "
+                            "top up at https://console.anthropic.com/settings/billing "
+                            "(Claude) or https://console.cloud.google.com/billing (Gemini).",
+                            fallback_provider,
+                        )
+                    else:
+                        logger.exception("Fallback provider %s also failed", fallback_provider)
                     record["status"] = "analysis_error"
-                    record["brief"] = f"Primary ({provider}): {primary_exc}; Fallback ({fallback_provider}): {fallback_exc}"
+                    record["brief"] = (
+                        f"Primary ({provider}): {primary_exc}; "
+                        f"Fallback ({fallback_provider}): {fallback_exc}"
+                    )
                     if not dry_run:
                         from src.alerting import send_error_alert
                         send_error_alert(config, "analyze", fallback_exc)

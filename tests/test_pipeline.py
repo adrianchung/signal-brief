@@ -1,7 +1,7 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
-from src.pipeline import run_pipeline, NO_STORIES_MSG
+from src.pipeline import run_pipeline, NO_STORIES_MSG, _is_retryable, _is_credit_exhausted
 
 
 SAMPLE_STORY = {"objectID": "1", "title": "T", "score": 200, "url": "https://example.com",
@@ -28,6 +28,13 @@ def mock_run_logger():
     with patch("src.pipeline.RunLogger") as mock_cls:
         mock_cls.return_value = MagicMock()
         yield mock_cls
+
+
+@pytest.fixture(autouse=True)
+def mock_sleep():
+    """Patch time.sleep so retry tests don't actually wait."""
+    with patch("src.pipeline.time.sleep") as mock_sl:
+        yield mock_sl
 
 
 # ---------------------------------------------------------------------------
@@ -450,3 +457,120 @@ class TestRunPipelineFallback:
             ok = run_pipeline(config, provider="gemini")
 
         assert ok is True
+
+
+# ---------------------------------------------------------------------------
+# Retry logic
+# ---------------------------------------------------------------------------
+
+class TestRetryHelpers:
+    def test_is_retryable_503(self):
+        assert _is_retryable(Exception("503 service unavailable"))
+
+    def test_is_retryable_overloaded(self):
+        assert _is_retryable(Exception("The model is overloaded"))
+
+    def test_is_retryable_rate_limit(self):
+        assert _is_retryable(Exception("429 rate limit exceeded"))
+
+    def test_is_retryable_quota_exceeded(self):
+        assert _is_retryable(Exception("quota exceeded for project"))
+
+    def test_not_retryable_generic_error(self):
+        assert not _is_retryable(Exception("invalid api key"))
+
+    def test_not_retryable_400(self):
+        assert not _is_retryable(Exception("400 bad request"))
+
+    def test_is_credit_exhausted_balance(self):
+        assert _is_credit_exhausted(Exception("Your credit balance is too low to access the API"))
+
+    def test_is_credit_exhausted_billing(self):
+        assert _is_credit_exhausted(Exception("billing account suspended"))
+
+    def test_not_credit_exhausted_503(self):
+        assert not _is_credit_exhausted(Exception("503 service unavailable"))
+
+
+class TestRetryBehavior:
+    def test_primary_retried_on_transient_error_then_succeeds(self, mock_sleep):
+        config = make_config()
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.side_effect = [
+            Exception("503 unavailable"),
+            "brief on second try",
+        ]
+        mock_deliverer = MagicMock()
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=mock_analyzer), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
+            ok = run_pipeline(config, provider="gemini")
+
+        assert ok is True
+        assert mock_analyzer.analyze.call_count == 2
+        mock_sleep.assert_called_once()
+        mock_deliverer.send.assert_called_once_with("brief on second try")
+
+    def test_primary_retried_up_to_max_then_falls_back(self, mock_sleep):
+        config = make_config()
+        primary = MagicMock()
+        primary.analyze.side_effect = Exception("503 unavailable")
+        fallback = MagicMock()
+        fallback.analyze.return_value = "fallback brief"
+
+        def side_effect(cfg, prov):
+            return primary if prov == "gemini" else fallback
+
+        mock_deliverer = MagicMock()
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", side_effect=side_effect), \
+             patch("src.pipeline.get_deliverers", return_value=[mock_deliverer]):
+            ok = run_pipeline(config, provider="gemini", fallback_provider="claude")
+
+        assert ok is True
+        assert primary.analyze.call_count == 3  # initial + 2 retries
+        assert mock_sleep.call_count == 2
+        fallback.analyze.assert_called_once()
+        mock_deliverer.send.assert_called_once_with("fallback brief")
+
+    def test_non_retryable_error_goes_straight_to_fallback(self, mock_sleep):
+        config = make_config()
+        primary = MagicMock()
+        primary.analyze.side_effect = Exception("invalid api key")
+        fallback = MagicMock()
+        fallback.analyze.return_value = "fallback brief"
+
+        def side_effect(cfg, prov):
+            return primary if prov == "gemini" else fallback
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", side_effect=side_effect), \
+             patch("src.pipeline.get_deliverers", return_value=[MagicMock()]):
+            ok = run_pipeline(config, provider="gemini", fallback_provider="claude")
+
+        assert ok is True
+        primary.analyze.assert_called_once()  # no retries
+        mock_sleep.assert_not_called()
+        fallback.analyze.assert_called_once()
+
+    def test_credit_exhausted_fallback_logs_clear_message(self, mock_sleep, caplog):
+        import logging
+        config = make_config()
+        primary = MagicMock()
+        primary.analyze.side_effect = Exception("503 unavailable")
+        fallback = MagicMock()
+        fallback.analyze.side_effect = Exception("Your credit balance is too low to access the API")
+
+        def side_effect(cfg, prov):
+            return primary if prov == "gemini" else fallback
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", side_effect=side_effect), \
+             patch("src.alerting.send_error_alert"), \
+             caplog.at_level(logging.ERROR, logger="src.pipeline"):
+            ok = run_pipeline(config, provider="gemini", fallback_provider="claude")
+
+        assert ok is False
+        assert any("insufficient credits" in r.message for r in caplog.records)
