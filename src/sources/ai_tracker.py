@@ -15,13 +15,26 @@ import httpx
 logger = logging.getLogger(__name__)
 
 DEFAULT_FEEDS: list[tuple[str, str]] = [
+    # --- Major labs ---
     # Anthropic has no official RSS — these are community-maintained mirrors
     ("Anthropic News",        "https://raw.githubusercontent.com/taobojlen/anthropic-rss-feed/main/anthropic_news_rss.xml"),
     ("Anthropic Engineering", "https://raw.githubusercontent.com/conoro/anthropic-engineering-rss-feed/main/anthropic_engineering_rss.xml"),
-    ("Simon Willison",        "https://simonwillison.net/atom/everything/"),
     ("OpenAI",                "https://openai.com/blog/rss.xml"),
-    ("Hugging Face",          "https://huggingface.co/blog/feed.xml"),
     ("Google DeepMind",       "https://deepmind.google/blog/rss.xml"),
+    ("Meta Engineering",      "https://engineering.fb.com/feed/"),       # covers Meta AI research
+    ("Microsoft Research",    "https://www.microsoft.com/en-us/research/feed/"),
+
+    # --- High-signal newsletters ---
+    ("Import AI",             "https://importai.substack.com/feed"),      # Jack Clark (Anthropic co-founder), weekly
+    ("Interconnects",         "https://www.interconnects.ai/feed"),       # Nathan Lambert, RLHF / open models
+    ("Ahead of AI",           "https://magazine.sebastianraschka.com/feed"),  # Sebastian Raschka, ML papers
+    ("Last Week in AI",       "https://lastweekin.ai/feed"),              # weekly roundup
+
+    # --- Research & practitioner blogs ---
+    ("Simon Willison",        "https://simonwillison.net/atom/everything/"),
+    ("The Gradient",          "https://thegradient.pub/rss/"),            # academic-leaning long-form
+    ("Hugging Face",          "https://huggingface.co/blog/feed.xml"),
+    ("Alignment Forum",       "https://www.alignmentforum.org/feed.xml"), # AI safety / agent research
 ]
 
 _HEADERS = {"User-Agent": "signal-brief/1.0 (RSS reader; +https://github.com/adrianchung/signal-brief)"}
