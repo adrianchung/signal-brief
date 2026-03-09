@@ -6,6 +6,7 @@ from src.delivery import get_deliverers
 from src.delivery.slack import SlackDeliverer, _to_mrkdwn
 from src.delivery.ntfy import NtfyDeliverer, _extract_story_actions
 from src.delivery.sms import SMSDeliverer, _to_sms
+from src.delivery.email import EmailDeliverer, _make_subject, _to_html, _to_plain
 
 
 # ---------------------------------------------------------------------------
@@ -22,6 +23,13 @@ def make_config(**kwargs):
     cfg.twilio_auth_token = kwargs.get("twilio_auth_token", None)
     cfg.twilio_from_number = kwargs.get("twilio_from_number", None)
     cfg.twilio_to_number = kwargs.get("twilio_to_number", None)
+    cfg.email_to = kwargs.get("email_to", None)
+    cfg.email_from = kwargs.get("email_from", None)
+    cfg.sendgrid_api_key = kwargs.get("sendgrid_api_key", None)
+    cfg.smtp_host = kwargs.get("smtp_host", None)
+    cfg.smtp_port = kwargs.get("smtp_port", 587)
+    cfg.smtp_user = kwargs.get("smtp_user", None)
+    cfg.smtp_pass = kwargs.get("smtp_pass", None)
     return cfg
 
 
@@ -277,3 +285,176 @@ class TestSMSDeliverer:
             d.send("short")
             call_kwargs = mock_client_cls.return_value.messages.create.call_args[1]
             assert "short" in call_kwargs["body"]
+
+
+# ---------------------------------------------------------------------------
+# EmailDeliverer helpers
+# ---------------------------------------------------------------------------
+
+BRIEF = """\
+## Theme
+AI agents are eating the world.
+
+## Top Stories
+- **[Some Article](https://example.com/article)** — it matters. _(42 pts)_
+
+## Bottom Line
+Everything is fine.
+"""
+
+
+class TestEmailHelpers:
+    def test_make_subject_extracts_theme(self):
+        assert _make_subject(BRIEF) == "Signal Brief: AI agents are eating the world."
+
+    def test_make_subject_fallback(self):
+        assert _make_subject("no theme here") == "Signal Brief"
+
+    def test_to_html_contains_link(self):
+        html = _to_html(BRIEF)
+        assert '<a href="https://example.com/article">' in html
+
+    def test_to_html_contains_heading(self):
+        html = _to_html(BRIEF)
+        assert "<h2>" in html
+
+    def test_to_html_wraps_in_template(self):
+        html = _to_html(BRIEF)
+        assert "<!DOCTYPE html>" in html
+        assert "Signal Brief" in html
+
+    def test_to_plain_strips_headings(self):
+        plain = _to_plain(BRIEF)
+        assert "##" not in plain
+
+    def test_to_plain_exposes_url(self):
+        plain = _to_plain(BRIEF)
+        assert "https://example.com/article" in plain
+
+    def test_to_plain_strips_bold(self):
+        plain = _to_plain(BRIEF)
+        assert "**" not in plain
+
+
+class TestEmailDelivererSendGrid:
+    def _deliverer(self):
+        return EmailDeliverer(
+            to="to@example.com",
+            from_="from@example.com",
+            sendgrid_api_key="SG.fake",
+        )
+
+    def test_posts_to_sendgrid(self):
+        with patch("src.delivery.email.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            self._deliverer().send(BRIEF)
+        assert mock_post.call_args[0][0] == "https://api.sendgrid.com/v3/mail/send"
+
+    def test_authorization_header_sent(self):
+        with patch("src.delivery.email.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            self._deliverer().send(BRIEF)
+        headers = mock_post.call_args[1]["headers"]
+        assert headers["Authorization"] == "Bearer SG.fake"
+
+    def test_payload_has_html_and_plain(self):
+        with patch("src.delivery.email.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            self._deliverer().send(BRIEF)
+        payload = mock_post.call_args[1]["json"]
+        types = [c["type"] for c in payload["content"]]
+        assert "text/html" in types
+        assert "text/plain" in types
+
+    def test_subject_uses_theme(self):
+        with patch("src.delivery.email.httpx.post") as mock_post:
+            mock_post.return_value.raise_for_status.return_value = None
+            self._deliverer().send(BRIEF)
+        payload = mock_post.call_args[1]["json"]
+        assert "AI agents" in payload["subject"]
+
+
+class TestEmailDelivererSMTP:
+    def test_smtp_send_called(self):
+        d = EmailDeliverer(
+            to="to@example.com",
+            from_="from@example.com",
+            smtp_host="smtp.example.com",
+            smtp_user="user",
+            smtp_pass="pass",
+        )
+        with patch("src.delivery.email.smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp = MagicMock()
+            mock_smtp_cls.return_value.__enter__.return_value = mock_smtp
+            d.send(BRIEF)
+        mock_smtp.send_message.assert_called_once()
+
+    def test_smtp_login_called_when_credentials_set(self):
+        d = EmailDeliverer(
+            to="to@example.com",
+            from_="from@example.com",
+            smtp_host="smtp.example.com",
+            smtp_user="user",
+            smtp_pass="secret",
+        )
+        with patch("src.delivery.email.smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp = MagicMock()
+            mock_smtp_cls.return_value.__enter__.return_value = mock_smtp
+            d.send(BRIEF)
+        mock_smtp.login.assert_called_once_with("user", "secret")
+
+    def test_smtp_login_skipped_when_no_credentials(self):
+        d = EmailDeliverer(
+            to="to@example.com",
+            from_="from@example.com",
+            smtp_host="smtp.example.com",
+        )
+        with patch("src.delivery.email.smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp = MagicMock()
+            mock_smtp_cls.return_value.__enter__.return_value = mock_smtp
+            d.send(BRIEF)
+        mock_smtp.login.assert_not_called()
+
+
+class TestGetDeliverersEmail:
+    def test_email_added_with_sendgrid(self):
+        cfg = make_config(
+            slack_webhook_url=None,
+            ntfy_topic=None,
+        )
+        cfg.email_to = "to@example.com"
+        cfg.email_from = "from@example.com"
+        cfg.sendgrid_api_key = "SG.fake"
+        cfg.smtp_host = None
+        deliverers = get_deliverers(cfg)
+        assert any(isinstance(d, EmailDeliverer) for d in deliverers)
+
+    def test_email_added_with_smtp(self):
+        cfg = make_config()
+        cfg.email_to = "to@example.com"
+        cfg.email_from = "from@example.com"
+        cfg.sendgrid_api_key = None
+        cfg.smtp_host = "smtp.example.com"
+        cfg.smtp_port = 587
+        cfg.smtp_user = None
+        cfg.smtp_pass = None
+        deliverers = get_deliverers(cfg)
+        assert any(isinstance(d, EmailDeliverer) for d in deliverers)
+
+    def test_email_not_added_when_no_transport(self):
+        cfg = make_config()
+        cfg.email_to = "to@example.com"
+        cfg.email_from = "from@example.com"
+        cfg.sendgrid_api_key = None
+        cfg.smtp_host = None
+        deliverers = get_deliverers(cfg)
+        assert not any(isinstance(d, EmailDeliverer) for d in deliverers)
+
+    def test_email_not_added_when_no_recipient(self):
+        cfg = make_config()
+        cfg.email_to = None
+        cfg.email_from = "from@example.com"
+        cfg.sendgrid_api_key = "SG.fake"
+        cfg.smtp_host = None
+        deliverers = get_deliverers(cfg)
+        assert not any(isinstance(d, EmailDeliverer) for d in deliverers)

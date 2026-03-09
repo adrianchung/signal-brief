@@ -29,4 +29,16 @@ def get_deliverers(config: "Settings") -> list[Deliverer]:
             config.twilio_to_number,    # type: ignore[arg-type]
         ))
 
+    if config.email_to and config.email_from and (config.sendgrid_api_key or config.smtp_host):
+        from src.delivery.email import EmailDeliverer
+        deliverers.append(EmailDeliverer(
+            to=config.email_to,
+            from_=config.email_from,
+            sendgrid_api_key=config.sendgrid_api_key,
+            smtp_host=config.smtp_host,
+            smtp_port=config.smtp_port,
+            smtp_user=config.smtp_user,
+            smtp_pass=config.smtp_pass,
+        ))
+
     return deliverers

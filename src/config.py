@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     # If unset, falls back to the first available configured channel.
     alert_channel: Optional[str] = None
 
+    # Email delivery (opt-in) — requires EMAIL_TO + EMAIL_FROM + one transport
+    email_to: Optional[str] = None
+    email_from: Optional[str] = None
+    sendgrid_api_key: Optional[str] = None  # SendGrid REST transport
+    smtp_host: Optional[str] = None          # SMTP transport (alternative to SendGrid)
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_pass: Optional[str] = None
+
     # LLM provider fallback — tried automatically if the primary provider fails
     fallback_provider: Optional[str] = None
 
