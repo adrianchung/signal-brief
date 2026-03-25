@@ -35,6 +35,9 @@ DEFAULT_FEEDS: list[tuple[str, str]] = [
     ("The Gradient",          "https://thegradient.pub/rss/"),            # academic-leaning long-form
     ("Hugging Face",          "https://huggingface.co/blog/feed.xml"),
     ("Alignment Forum",       "https://www.alignmentforum.org/feed.xml"), # AI safety / agent research
+
+    # --- MCP (Model Context Protocol) ---
+    ("MCP Specification",     "https://github.com/modelcontextprotocol/specification/releases.atom"),  # official spec releases
 ]
 
 _HEADERS = {"User-Agent": "signal-brief/1.0 (RSS reader; +https://github.com/adrianchung/signal-brief)"}

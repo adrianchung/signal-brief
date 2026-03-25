@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     top_n_stories: int = 10
     # Stored as CSV strings — pydantic-settings v2 JSON-parses list[str] from dotenv,
     # which breaks comma-separated values. Use .keyword_list / .schedule_time_list instead.
-    keywords: str = "kubernetes,MCP,AI agents,GKE,agentic,LLM,open source AI,Claude"
+    keywords: str = "kubernetes,MCP,model context protocol,AI agents,GKE,agentic,LLM,open source AI,Claude"
     schedule_times: str = "08:00,17:00"
 
     # Slack
