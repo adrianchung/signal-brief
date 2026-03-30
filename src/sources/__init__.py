@@ -26,6 +26,11 @@ def get_sources(config: "Settings", keywords: list[str] | None = None) -> list[S
             extra_feeds=config.ai_tracker_extra_feed_list,
         ))
 
+    blog_feeds = config.blog_feed_list
+    if blog_feeds:
+        from src.sources.blog_feeds import BlogFeedsSource
+        sources.append(BlogFeedsSource(feeds=blog_feeds, hours_back=config.blog_feeds_hours_back))
+
     if config.enable_stocks:
         from src.sources.stocks import StocksSource
         sources.append(StocksSource(

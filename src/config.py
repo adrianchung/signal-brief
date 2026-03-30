@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     ai_tracker_hours_back: int = 24
     ai_tracker_extra_feeds: str = ""  # CSV of "name=url" pairs
 
+    # Personal/engineering blog RSS feeds (always enabled when non-empty)
+    blog_feeds: str = "Addy Osmani=https://addyosmani.com/rss.xml"
+    blog_feeds_hours_back: int = 12
+
     # Cross-run deduplication
     dedup_window_days: int = 7
     seen_stories_path: str = "data/seen_stories.json"
@@ -88,6 +92,18 @@ class Settings(BaseSettings):
         """Parse ``"Name=url,Name2=url2"`` into ``[(name, url), ...]``."""
         result = []
         for item in self.ai_tracker_extra_feeds.split(","):
+            item = item.strip()
+            if "=" in item:
+                name, _, url = item.partition("=")
+                if name.strip() and url.strip():
+                    result.append((name.strip(), url.strip()))
+        return result
+
+    @property
+    def blog_feed_list(self) -> list[tuple[str, str]]:
+        """Parse ``"Name=url,Name2=url2"`` into ``[(name, url), ...]``."""
+        result = []
+        for item in self.blog_feeds.split(","):
             item = item.strip()
             if "=" in item:
                 name, _, url = item.partition("=")
