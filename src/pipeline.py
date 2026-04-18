@@ -210,7 +210,15 @@ def run_pipeline(
                     run_log.write(record)
                     return False
             else:
-                logger.exception("Analysis step failed")
+                if _is_credit_exhausted(primary_exc):
+                    logger.error(
+                        "Primary provider %s has insufficient credits: %s — "
+                        "top up at https://console.anthropic.com/settings/billing "
+                        "(Claude) or https://console.cloud.google.com/billing (Gemini).",
+                        provider, primary_exc,
+                    )
+                else:
+                    logger.error("Analysis step failed: %s", primary_exc, exc_info=primary_exc)
                 record["status"] = "analysis_error"
                 record["brief"] = str(primary_exc)
                 if not dry_run:

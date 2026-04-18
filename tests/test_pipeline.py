@@ -574,3 +574,38 @@ class TestRetryBehavior:
 
         assert ok is False
         assert any("insufficient credits" in r.message for r in caplog.records)
+
+    def test_credit_exhausted_primary_no_fallback_logs_clear_message(self, mock_sleep, caplog):
+        import logging
+        config = make_config()
+        primary = MagicMock()
+        primary.analyze.side_effect = Exception(
+            "Your credit balance is too low to access the Anthropic API"
+        )
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=primary), \
+             patch("src.alerting.send_error_alert"), \
+             caplog.at_level(logging.ERROR, logger="src.pipeline"):
+            ok = run_pipeline(config, provider="claude")
+
+        assert ok is False
+        assert any("insufficient credits" in r.message for r in caplog.records)
+        # Regression: the original exception message must appear in logs
+        # (previously swallowed by logger.exception outside an except block)
+        assert any("credit balance" in r.message.lower() for r in caplog.records)
+
+    def test_primary_non_credit_error_no_fallback_logs_exception(self, mock_sleep, caplog):
+        import logging
+        config = make_config()
+        primary = MagicMock()
+        primary.analyze.side_effect = Exception("unexpected boom")
+
+        with _patch_sources([SAMPLE_STORY]), \
+             patch("src.pipeline.get_analyzer", return_value=primary), \
+             patch("src.alerting.send_error_alert"), \
+             caplog.at_level(logging.ERROR, logger="src.pipeline"):
+            ok = run_pipeline(config, provider="claude")
+
+        assert ok is False
+        assert any("unexpected boom" in r.message for r in caplog.records)
