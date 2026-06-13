@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bench-crashloop
+  labels:
+    benchmark: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-app
+  namespace: bench-crashloop
+  labels:
+    app: crashloop-app
+    benchmark: "true"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: crashloop-app
+  template:
+    metadata:
+      labels:
+        app: crashloop-app
+        benchmark: "true"
+    spec:
+      containers:
+        - name: crashloop-container
+          image: busybox:1.36
+          command: ["sh", "-c", "echo 'Starting...'; exit 1"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"

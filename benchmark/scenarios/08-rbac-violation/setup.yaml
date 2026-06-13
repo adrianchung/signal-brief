@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bench-rbac
+  labels:
+    benchmark: "true"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: restricted-sa
+  namespace: bench-rbac
+  labels:
+    benchmark: "true"
+# No ClusterRoleBinding or RoleBinding — this ServiceAccount has zero permissions
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rbac-test-pod
+  namespace: bench-rbac
+  labels:
+    app: rbac-test
+    benchmark: "true"
+spec:
+  serviceAccountName: restricted-sa
+  containers:
+    - name: app
+      image: nginx:1.25
+      ports:
+        - containerPort: 80
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "32Mi"
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
+    - name: kubectl-sidecar
+      image: bitnami/kubectl:latest
+      command:
+        - sh
+        - -c
+        - |
+          while true; do
+            echo "=== Attempting to list pods ==="
+            kubectl get pods -n bench-rbac
+            echo "Exit code: $?"
+            echo "=== Attempting to list services ==="
+            kubectl get services -n bench-rbac
+            echo "Exit code: $?"
+            sleep 15
+          done
+      resources:
+        requests:
+          cpu: "25m"
+          memory: "32Mi"
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
+  restartPolicy: Always

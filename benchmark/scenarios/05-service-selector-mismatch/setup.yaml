@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bench-selector
+  labels:
+    benchmark: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-app
+  namespace: bench-selector
+  labels:
+    app: backend-app
+    benchmark: "true"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        benchmark: "true"
+    spec:
+      containers:
+        - name: backend-container
+          image: nginx:1.25
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+  namespace: bench-selector
+  labels:
+    benchmark: "true"
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-pod
+  namespace: bench-selector
+  labels:
+    app: client
+    benchmark: "true"
+spec:
+  containers:
+    - name: client
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          while true; do
+            echo "Attempting connection to backend-svc..."
+            wget -qO- --timeout=5 http://backend-svc/
+            echo "Exit code: $?"
+            sleep 10
+          done
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "16Mi"
+        limits:
+          cpu: "50m"
+          memory: "32Mi"
+  restartPolicy: Always

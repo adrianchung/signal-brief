@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bench-oom
+  labels:
+    benchmark: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-app
+  namespace: bench-oom
+  labels:
+    app: oom-app
+    benchmark: "true"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oom-app
+  template:
+    metadata:
+      labels:
+        app: oom-app
+        benchmark: "true"
+    spec:
+      containers:
+        - name: stress-container
+          image: polinux/stress:latest
+          args: ["stress", "--vm", "1", "--vm-bytes", "100M", "--vm-hang", "0"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "8Mi"
+            limits:
+              cpu: "200m"
+              memory: "10Mi"

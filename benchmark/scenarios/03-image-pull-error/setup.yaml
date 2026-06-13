@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bench-imagepull
+  labels:
+    benchmark: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-app
+  namespace: bench-imagepull
+  labels:
+    app: imagepull-app
+    benchmark: "true"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: imagepull-app
+  template:
+    metadata:
+      labels:
+        app: imagepull-app
+        benchmark: "true"
+    spec:
+      containers:
+        - name: app-container
+          image: doesnotexist.io/fake/image:v99.9
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
